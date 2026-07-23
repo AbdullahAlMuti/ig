@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+
+# WXT build output & generated types
+.output/
+.wxt/
+stats.html
+web-ext.config.ts
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# generated icons (decoded from assets/icons/*.b64 by scripts/prepare-icons.mjs)
+src/public/icons/
+
+# env / editor / OS
+.env
+.env.*
+.DS_Store
+.idea/
+.vscode/
+*.zip
