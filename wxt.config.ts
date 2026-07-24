@@ -17,9 +17,17 @@ export default defineConfig({
     host_permissions: ['https://www.instagram.com/*'],
     action: {
       default_title: 'FeedSort Pro',
+      default_icon: {
+        16: '/icons/16.png',
+        32: '/icons/32.png',
+        48: '/icons/48.png',
+        128: '/icons/128.png',
+      },
     },
     icons: {
+      16: '/icons/16.png',
       32: '/icons/32.png',
+      48: '/icons/48.png',
       128: '/icons/128.png',
     },
   },
