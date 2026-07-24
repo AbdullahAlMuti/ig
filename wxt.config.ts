@@ -12,9 +12,12 @@ export default defineConfig({
     name: 'FeedSort Pro',
     description:
       'Sort Instagram feed/reels/hashtag/search, analyze engagement rates, bulk download media, and export analytics to Excel.',
-    // ExtPay stripped — no payment/host permissions needed beyond Instagram.
     permissions: ['activeTab', 'storage', 'sidePanel'],
-    host_permissions: ['https://www.instagram.com/*'],
+    host_permissions: [
+      'https://www.instagram.com/*',
+      'https://*.cdninstagram.com/*',
+      'https://*.fbcdn.net/*',
+    ],
     action: {
       default_title: 'FeedSort Pro',
       default_icon: {
