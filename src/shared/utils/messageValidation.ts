@@ -5,12 +5,11 @@
  * (sidepanel <-> background <-> content scripts <-> main world bridge).
  */
 import {
-  RUNTIME_MSG,
-  POST_MSG,
   OVERLAY_MODES,
   type OverlayMode,
   type EngagementWeights,
 } from '../types/instagram';
+import { RUNTIME_MSG, POST_MSG } from '../types/messages';
 
 export interface ValidatedMessageResult {
   valid: boolean;

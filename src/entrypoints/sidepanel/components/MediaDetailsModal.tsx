@@ -179,20 +179,16 @@ export function MediaDetailsModal({ item, rankData, store, onClose }: MediaDetai
           </div>
         )}
 
-        {/* Secondary Achievements */}
-        {rankData && rankData.secondaryBadges.length > 1 && (
+        {/* Achievements */}
+        {rankData && rankData.achievements.length > 0 && (
           <div className="mt-3 flex flex-col gap-1">
-            <div className="text-[11px] font-medium text-[#667085]">Category Achievements</div>
+            <div className="text-[11px] font-medium text-[#667085]">Achievements</div>
             <div className="flex flex-wrap gap-1">
-              {rankData.secondaryBadges.map((bKey) => {
-                const b = BADGE_METADATA[bKey as BadgeType];
-                if (!b) return null;
-                return (
-                  <span key={bKey} className="inline-flex items-center gap-1 rounded bg-[#F4F5F7] px-2 py-0.5 text-[10px] font-medium text-[#171A21]">
-                    • {b.label}
-                  </span>
-                );
-              })}
+              {rankData.achievements.map((ach, idx) => (
+                <span key={idx} className="inline-flex items-center gap-1 rounded bg-[#F4F5F7] px-2 py-0.5 text-[10px] font-medium text-[#171A21]">
+                  {ach}
+                </span>
+              ))}
             </div>
           </div>
         )}

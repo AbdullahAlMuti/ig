@@ -1,0 +1,42 @@
+name: CI & Chrome Web Store Package Readiness
+
+on:
+  push:
+    branches: [ main, audit/chrome-web-store-readiness ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type check
+        run: npm run compile
+
+      - name: Run Vitest unit tests
+        run: npm run test
+
+      - name: Build Chrome MV3 extension package
+        run: npm run build
+
+      - name: Generate Chrome Web Store release zip
+        run: npm run zip
+
+      - name: Verify build artifact existence
+        run: |
+          test -d .output/chrome-mv3 || (echo ".output/chrome-mv3 missing" && exit 1)
+          test -f .output/chrome-mv3/manifest.json || (echo "manifest.json missing" && exit 1)
+          ls -la .output/*.zip
