@@ -130,7 +130,26 @@ export const OVERLAY_MODE_LABELS: Record<OverlayMode, string> = {
 export const STORAGE_KEYS = {
   overlayMode: 'ndy_ig_overlay_mode',
   erWeights: 'ndy_ig_er_weights',
+  badgeDisplayMode: 'ndy_ig_badge_display_mode',
 } as const;
+
+export type BadgeDisplayMode = 'smart' | 'er' | 'hover' | 'none';
+
+export const BADGE_DISPLAY_MODES: readonly BadgeDisplayMode[] = Object.freeze([
+  'smart',
+  'hover',
+  'er',
+  'none',
+]);
+
+export const DEFAULT_BADGE_DISPLAY_MODE: BadgeDisplayMode = 'hover';
+
+export const BADGE_DISPLAY_MODE_LABELS: Record<BadgeDisplayMode, string> = {
+  smart: 'Smart performance badges',
+  hover: 'Smart badge (show ER on hover)',
+  er: 'Classic ER percentage',
+  none: 'No badges',
+};
 
 /* ------------------------------------------------------------------ *
  * Sort + date-range option tables (indices preserved from the original

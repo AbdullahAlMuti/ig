@@ -1,25 +1,31 @@
 /**
- * Side-panel state hook — the single source of truth for the UI.
+ * Side-panel state hook — single source of truth for FeedSort Pro.
  *
- * Subscribes to the captured-post stream (`ndy_side_shop`) and the in-page
- * download-queue length (`ndy_dq`), derives the filtered/sorted view, and
- * exposes actions (goto, clean&refresh, swipes, stop-scroll, bulk downloads,
- * Excel export). A 2 s watchdog mirrors the original: if snapshots stop
- * arriving, the store is considered disconnected and controls disable.
+ * Subscribes to captured-post stream (`ndy_side_shop`), manages base date/sort options,
+ * performance badge multi-select filters, item selections, and exposes actions.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type InstagramMediaItem,
+  type BadgeDisplayMode,
   DATE_RANGE_OPTIONS,
   SORT_OPTIONS,
   DEFAULT_SORT_INDEX,
+  DEFAULT_BADGE_DISPLAY_MODE,
+  BADGE_DISPLAY_MODES,
+  STORAGE_KEYS,
 } from '../../../shared/types/instagram';
 import { RUNTIME_MSG, type RuntimeMessage } from '../../../shared/types/messages';
-import { filterAndSort } from '../../../shared/utils/sortFilter';
+import {
+  filterAndSort,
+  type PerformanceFilterState,
+  DEFAULT_PERFORMANCE_FILTERS,
+} from '../../../shared/utils/sortFilter';
 import { buildDownloadEntries } from '../../../shared/utils/mediaDownloader';
 import { exportPostsToExcel } from '../../../shared/utils/excelExporter';
+import type { RankingResult } from '../../../shared/utils/performanceRanker';
 
-const WATCHDOG_MS = 2000;
+const WATCHDOG_MS = 2500;
 
 export interface BulkProgress {
   scopeLabel: string;
@@ -56,11 +62,16 @@ export function useMediaStore() {
   const [connected, setConnected] = useState(false);
   const [dayIndex, setDayIndex] = useState(0);
   const [sortIndex, setSortIndex] = useState(DEFAULT_SORT_INDEX);
+  const [performanceFilters, setPerformanceFilters] = useState<PerformanceFilterState>(
+    { ...DEFAULT_PERFORMANCE_FILTERS },
+  );
   const [queue, setQueue] = useState(0);
   const [busy, setBusy] = useState(false);
   const [scrolling, setScrolling] = useState(false);
   const [progress, setProgress] = useState<BulkProgress | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  const [badgeDisplayMode, setBadgeDisplayModeState] = useState<BadgeDisplayMode>(DEFAULT_BADGE_DISPLAY_MODE);
 
   const queueRef = useRef(0);
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,6 +79,22 @@ export function useMediaStore() {
   const flashToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 2500);
+  }, []);
+
+  /* ---- storage sync for badgeDisplayMode ---- */
+  useEffect(() => {
+    chrome.storage.local.get([STORAGE_KEYS.badgeDisplayMode]).then((stored) => {
+      const mode = stored[STORAGE_KEYS.badgeDisplayMode] as BadgeDisplayMode | undefined;
+      if (mode && BADGE_DISPLAY_MODES.includes(mode)) {
+        setBadgeDisplayModeState(mode);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const setBadgeDisplayMode = useCallback((mode: BadgeDisplayMode) => {
+    if (!BADGE_DISPLAY_MODES.includes(mode)) return;
+    setBadgeDisplayModeState(mode);
+    chrome.storage.local.set({ [STORAGE_KEYS.badgeDisplayMode]: mode }).catch(() => {});
   }, []);
 
   /* ---- inbound message wiring ---- */
@@ -83,6 +110,7 @@ export function useMediaStore() {
           setProgress(null);
           queueRef.current = 0;
           setQueue(0);
+          setScrolling(false);
         }, WATCHDOG_MS);
       } else if (message?.type === RUNTIME_MSG.downloadQueue) {
         queueRef.current = Number(message.count) || 0;
@@ -96,53 +124,98 @@ export function useMediaStore() {
     };
   }, []);
 
-  /* ---- derived filtered/sorted view ---- */
+  /* ---- derived filtered/sorted view & rankings ---- */
   const days = DATE_RANGE_OPTIONS[dayIndex]?.days ?? 0;
   const sortKey = SORT_OPTIONS[sortIndex]?.key ?? '';
+
   const view = useMemo(
-    () => filterAndSort(posts, { days, sortKey }),
-    [posts, days, sortKey],
+    () => filterAndSort(posts, { days, sortKey, performanceFilters }),
+    [posts, days, sortKey, performanceFilters],
   );
+
   const filtered = view.items;
+  const baseItems = view.baseItems;
+  const rankings: RankingResult = view.rankings;
+  const categoryCounts = view.categoryCounts;
+  const isPerformanceFiltered = view.isPerformanceFiltered;
 
-  const counts = { all: posts.length, filtered: filtered.length };
+  const counts = {
+    all: posts.length,
+    base: baseItems.length,
+    filtered: filtered.length,
+    selected: selectedCodes.size,
+  };
 
-  /* ---- actions ---- */
+  const clearPerformanceFilters = useCallback(() => {
+    setPerformanceFilters({ ...DEFAULT_PERFORMANCE_FILTERS });
+  }, []);
+
+  /* ---- item selection actions ---- */
+  const toggleSelect = useCallback((code: string) => {
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) {
+        next.delete(code);
+      } else {
+        next.add(code);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedCodes((prev) => {
+      if (prev.size === filtered.length && filtered.length > 0) {
+        return new Set();
+      }
+      return new Set(filtered.map((item) => item.code));
+    });
+  }, [filtered]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedCodes(new Set());
+  }, []);
+
+  /* ---- navigation & tab actions ---- */
   const gotoInstagram = useCallback(() => {
     window.open('https://www.instagram.com/explore/', '_blank');
   }, []);
 
-  const cleanRefresh = useCallback(async () => {
-    await sendToActiveTab({ type: RUNTIME_MSG.refresh });
+  const cleanRefresh = useCallback(async (): Promise<boolean> => {
+    const ok = await sendToActiveTab({ type: RUNTIME_MSG.refresh });
     setPosts([]);
     setProgress(null);
+    setSelectedCodes(new Set());
     queueRef.current = 0;
     setQueue(0);
+    setScrolling(false);
+    return ok;
   }, []);
 
-  const scrollTop = useCallback(() => void sendToActiveTab({ type: RUNTIME_MSG.top }), []);
+  const scrollTop = useCallback(async () => {
+    const ok = await sendToActiveTab({ type: RUNTIME_MSG.top });
+    if (ok) flashToast('Scrolled to top');
+  }, [flashToast]);
 
-  const swipe = useCallback(
-    async (count: number) => {
-      setScrolling(true);
-      const ok = await sendToActiveTab({ type: RUNTIME_MSG.swipe, count });
-      if (!ok) {
-        setScrolling(false);
-        return;
-      }
-      // Auto-clear the scrolling lock after the expected run window; the user
-      // can also cancel early via Stop Scrolling.
-      const window = 8500 * Math.max(1, count);
-      setTimeout(() => setScrolling(false), window);
-    },
-    [],
-  );
+  const startAutoScroll = useCallback(async () => {
+    if (scrolling) return;
+    setScrolling(true);
+    const ok = await sendToActiveTab({ type: RUNTIME_MSG.swipe, count: 500 });
+    if (!ok) {
+      setScrolling(false);
+      flashToast('Instagram tab is no longer available.');
+    } else {
+      flashToast('Auto-scroll started');
+    }
+  }, [scrolling, flashToast]);
 
   const stopScrolling = useCallback(async () => {
     await sendToActiveTab({ type: RUNTIME_MSG.stopScroll });
     setScrolling(false);
-  }, []);
+    flashToast('Auto-scroll stopped');
+  }, [flashToast]);
 
+  /* ---- download engine ---- */
   const waitForQueueRise = useCallback(async () => {
     for (let i = 0; i < 20; i++) {
       if (queueRef.current > 0) return true;
@@ -156,16 +229,16 @@ export function useMediaStore() {
   }, []);
 
   const runBulk = useCallback(
-    async (scope: 'all' | 'filtered', list: InstagramMediaItem[]) => {
+    async (scopeLabel: string, list: InstagramMediaItem[]) => {
       if (!Array.isArray(list) || list.length === 0) {
-        flashToast('Empty list.');
+        flashToast('No items to download.');
         return;
       }
       const plans = list.map((item) => ({ code: item.code, entries: buildDownloadEntries(item) }));
       const totalFiles = plans.reduce((sum, p) => sum + p.entries.length, 0);
 
       const p: BulkProgress = {
-        scopeLabel: scope === 'all' ? 'All medias' : 'Filtered medias',
+        scopeLabel,
         statusLabel: 'Preparing...',
         totalPosts: plans.length,
         processedPosts: 0,
@@ -177,9 +250,8 @@ export function useMediaStore() {
       setProgress({ ...p });
 
       if (totalFiles <= 0) {
-        setProgress({ ...p, statusLabel: 'No downloadable medias' });
-        flashToast('No downloadable medias found.');
-        setTimeout(() => setProgress(null), 400);
+        flashToast('No downloadable media found.');
+        setTimeout(() => setProgress(null), 300);
         return;
       }
 
@@ -212,60 +284,87 @@ export function useMediaStore() {
           setProgress({ ...p });
         }
         p.statusLabel = 'Completed';
-        p.currentFileLabel = '';
         setProgress({ ...p });
+        flashToast(`Downloaded ${p.completedFiles} files.`);
+      } catch {
+        flashToast('Download encountered an error.');
       } finally {
         setBusy(false);
-        await delay(600);
+        await delay(500);
         setProgress(null);
       }
     },
     [flashToast, waitForQueueRise, waitForQueueDrain],
   );
 
-  const downloadAll = useCallback(() => runBulk('all', posts), [runBulk, posts]);
-  const downloadFiltered = useCallback(() => runBulk('filtered', filtered), [runBulk, filtered]);
+  const downloadAll = useCallback(() => runBulk('All posts', posts), [runBulk, posts]);
+  const downloadFiltered = useCallback(() => runBulk('Filtered posts', filtered), [runBulk, filtered]);
+  const downloadSelected = useCallback(() => {
+    const selectedList = filtered.filter((item) => selectedCodes.has(item.code));
+    return runBulk('Selected posts', selectedList);
+  }, [runBulk, filtered, selectedCodes]);
 
-  const exportExcel = useCallback(async () => {
-    if (filtered.length === 0) {
+  const exportExcel = useCallback(async (customList?: InstagramMediaItem[]) => {
+    const listToExport = customList ?? filtered;
+    if (listToExport.length === 0) {
       flashToast('Nothing to export.');
       return;
     }
     try {
-      const name = await exportPostsToExcel(filtered);
+      const name = await exportPostsToExcel(listToExport, undefined, rankings);
       flashToast(`Exported ${name}`);
     } catch {
       flashToast('Export failed.');
     }
-  }, [filtered, flashToast]);
+  }, [filtered, rankings, flashToast]);
+
+  const exportSelected = useCallback(() => {
+    const selectedList = filtered.filter((item) => selectedCodes.has(item.code));
+    return exportExcel(selectedList);
+  }, [filtered, selectedCodes, exportExcel]);
 
   return {
     // state
     posts,
     filtered,
+    baseItems,
     counts,
     connected,
     dayIndex,
     sortIndex,
+    performanceFilters,
+    isPerformanceFiltered,
+    categoryCounts,
     queue,
     busy,
     scrolling,
     progress,
     toast,
+    selectedCodes,
+    badgeDisplayMode,
+    rankings,
     warnings: { missingDate: view.hadMissingDate, missingMetric: view.hadMissingMetric },
     // setters
     setDayIndex,
     setSortIndex,
+    setPerformanceFilters,
+    clearPerformanceFilters,
+    setBadgeDisplayMode,
     flashToast,
+    toggleSelect,
+    toggleSelectAll,
+    clearSelection,
     // actions
     gotoInstagram,
     cleanRefresh,
     scrollTop,
-    swipe,
+    startAutoScroll,
     stopScrolling,
     downloadAll,
     downloadFiltered,
+    downloadSelected,
     exportExcel,
+    exportSelected,
   };
 }
 

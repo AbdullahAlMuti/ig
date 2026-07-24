@@ -14,12 +14,6 @@ export function AutomationPanel({ store }: { store: MediaStoreApi }) {
           <ChevronsDown className="h-3.5 w-3.5" />
           Swipe down
         </Button>
-        <Button variant="secondary" disabled={disabled || scrolling} onClick={() => void swipe(10)}>
-          Swipe 10
-        </Button>
-        <Button variant="secondary" disabled={disabled || scrolling} onClick={() => void swipe(30)}>
-          Swipe 30
-        </Button>
         <Button variant="secondary" disabled={disabled} onClick={scrollTop}>
           <ArrowUpToLine className="h-3.5 w-3.5" />
           Top
@@ -30,8 +24,8 @@ export function AutomationPanel({ store }: { store: MediaStoreApi }) {
         </Button>
       </div>
       {scrolling && (
-        <p className="mt-2 text-[11px] text-slate-500">
-          Auto-scrolling with human-like 3–8&nbsp;s gaps… click <b>Stop scrolling</b> to cancel.
+        <p className="mt-2.5 text-[11px] leading-relaxed text-[#8e8e93]">
+          Auto-scrolling with human-like 3–8&nbsp;s gaps… click <strong className="font-semibold text-[#1d1d1f]">Stop scrolling</strong> to cancel.
         </p>
       )}
     </Panel>

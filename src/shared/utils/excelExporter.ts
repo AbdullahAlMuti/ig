@@ -3,13 +3,14 @@
  *
  * Produces a single "Posts" worksheet with a frozen header row and the columns
  * required by the spec — Shortcode, Post URL, Username, Likes, Comments,
- * Reposts, Views, Engagement Rate %, Date, Caption, Media Type — plus an
- * embedded thumbnail (from the captured base64) and blue hyperlinks on the
- * shortcode / post URL / username cells, preserving the original's polish.
+ * Reposts, Views, Engagement Rate %, Date, Caption, Media Type, Performance Badge,
+ * Overall Rank, Overall Score, Likes Rank, Comments Rank, Views Rank, ER Rank —
+ * plus an embedded thumbnail and clickable hyperlinks.
  */
 import ExcelJS from 'exceljs';
 import type { InstagramMediaItem } from '../types/instagram';
 import { fileTimestamp, formatDate } from './format';
+import { calculatePerformanceRankings, type RankingResult } from './performanceRanker';
 
 const IG = 'https://www.instagram.com';
 const LINK_FONT = { color: { argb: 'FF0000FF' }, underline: true } as const;
@@ -25,15 +26,22 @@ interface ColumnDef {
 const COLUMNS: ColumnDef[] = [
   { header: 'Image', key: 'image', width: 16 },
   { header: 'Shortcode', key: 'code', width: 14 },
-  { header: 'Post URL', key: 'url', width: 40 },
+  { header: 'Post URL', key: 'url', width: 38 },
   { header: 'Username', key: 'username', width: 18 },
   { header: 'Likes', key: 'likes', width: 12 },
   { header: 'Comments', key: 'comments', width: 12 },
   { header: 'Reposts', key: 'reposts', width: 12 },
   { header: 'Views', key: 'views', width: 12 },
   { header: 'Engagement Rate %', key: 'er', width: 18 },
+  { header: 'Performance Badge', key: 'performanceBadge', width: 20 },
+  { header: 'Overall Score', key: 'overallScore', width: 14 },
+  { header: 'Overall Rank', key: 'overallRank', width: 14 },
+  { header: 'Likes Rank', key: 'likesRank', width: 12 },
+  { header: 'Comments Rank', key: 'commentsRank', width: 14 },
+  { header: 'Views Rank', key: 'viewsRank', width: 12 },
+  { header: 'ER Rank', key: 'erRank', width: 12 },
   { header: 'Date', key: 'date', width: 14 },
-  { header: 'Caption', key: 'caption', width: 50 },
+  { header: 'Caption', key: 'caption', width: 45 },
   { header: 'Media Type', key: 'mediaType', width: 14 },
 ];
 
@@ -48,18 +56,21 @@ function loadImageSize(src: string): Promise<{ width: number; height: number }> 
 
 /**
  * Build and download an .xlsx for the given (already filtered/sorted) posts.
- * Returns the generated filename. Throws if the list is empty.
+ * Incorporates performance rankings into export.
  */
 export async function exportPostsToExcel(
   items: InstagramMediaItem[],
   filename?: string,
+  rankingResult?: RankingResult,
 ): Promise<string> {
   if (!Array.isArray(items) || items.length === 0) {
     throw new Error('empty list');
   }
 
+  const rankings = rankingResult ?? calculatePerformanceRankings(items);
+
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'IG Sorter & Analytics';
+  workbook.creator = 'FeedSort Pro';
   workbook.created = new Date();
   const sheet = workbook.addWorksheet('Posts');
   sheet.columns = COLUMNS.map((c) => ({ header: c.header, key: c.key, width: c.width }));
@@ -69,6 +80,8 @@ export async function exportPostsToExcel(
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
     const postUrl = `${IG}/p/${item.code}`;
+    const rankInfo = rankings.byCode.get(item.code);
+
     const row = sheet.addRow({
       image: '',
       code: item.code,
@@ -79,6 +92,13 @@ export async function exportPostsToExcel(
       reposts: item.mediaRepostCount ?? '',
       views: item.playCount ?? '',
       er: item.engagementRate != null ? Number((100 * item.engagementRate).toFixed(2)) : '',
+      performanceBadge: rankInfo?.badge ? rankInfo.badge.label : '',
+      overallScore: rankInfo ? `${rankInfo.overallScore}/100` : '',
+      overallRank: rankInfo ? `#${rankInfo.overallRank}` : '',
+      likesRank: rankInfo ? `#${rankInfo.likesRank}` : '',
+      commentsRank: rankInfo ? `#${rankInfo.commentsRank}` : '',
+      viewsRank: rankInfo ? `#${rankInfo.viewsRank}` : '',
+      erRank: rankInfo ? `#${rankInfo.erRank}` : '',
       date: formatDate(item.createdAt),
       caption: item.captionText ?? '',
       mediaType: item.mediaType ?? '',
@@ -123,7 +143,7 @@ export async function exportPostsToExcel(
 
   const buffer = await workbook.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: XLSX_MIME });
-  const name = filename ?? `ig-sorter-${fileTimestamp()}.xlsx`;
+  const name = filename ?? `feedsort-pro-${fileTimestamp()}.xlsx`;
   const anchor = document.createElement('a');
   anchor.href = URL.createObjectURL(blob);
   anchor.download = name;

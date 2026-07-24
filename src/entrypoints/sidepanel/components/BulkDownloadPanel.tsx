@@ -5,7 +5,7 @@ import type { MediaStoreApi } from '../store/useMediaStore';
 
 function CountBadge({ value }: { value: number }) {
   return (
-    <span className="inline-flex min-w-[3ch] items-center justify-center rounded-full bg-sky-100 px-1.5 py-0.5 text-xs font-semibold tabular-nums text-sky-800">
+    <span className="inline-flex min-w-[2.5ch] items-center justify-center rounded-full bg-[#0066cc]/10 px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#0066cc]">
       {value}
     </span>
   );
@@ -27,11 +27,11 @@ export function BulkDownloadPanel({ store }: { store: MediaStoreApi }) {
     : [queue > 0 ? `Status: Queue ${queue}` : 'Status: Idle'];
 
   return (
-    <Panel title="Bulk download medias">
+    <Panel title="Bulk download media">
       <div className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <span>All medias</span>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e5e7] bg-[#f5f5f7] px-3 py-2">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-[#1d1d1f]">
+            <span>All media</span>
             <CountBadge value={counts.all} />
           </div>
           <Button
@@ -44,9 +44,9 @@ export function BulkDownloadPanel({ store }: { store: MediaStoreApi }) {
           </Button>
         </div>
 
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-            <span>Filtered medias</span>
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[#e5e5e7] bg-[#f5f5f7] px-3 py-2">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-[#1d1d1f]">
+            <span>Filtered media</span>
             <CountBadge value={counts.filtered} />
           </div>
           <Button
@@ -60,9 +60,11 @@ export function BulkDownloadPanel({ store }: { store: MediaStoreApi }) {
         </div>
       </div>
 
-      <pre className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-500">
-        {progressLines.join('\n')}
-      </pre>
+      <div className="mt-2.5 rounded-xl border border-[#e5e5e7] bg-[#fafafc] p-2.5">
+        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-[#515154]">
+          {progressLines.join('\n')}
+        </pre>
+      </div>
     </Panel>
   );
 }

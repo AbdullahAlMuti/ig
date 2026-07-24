@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { ExternalLink, RefreshCw } from 'lucide-react';
 import { Header } from './components/Header';
-import { Panel } from './components/Panel';
-import { Button } from './components/Button';
-import { BulkDownloadPanel } from './components/BulkDownloadPanel';
-import { AutomationPanel } from './components/AutomationPanel';
-import { FilterBar } from './components/FilterBar';
+import { SortAndScrollToolbar } from './components/SortAndScrollToolbar';
+import { BulkDownloadToolbar } from './components/BulkDownloadToolbar';
+import { MediaToolbar } from './components/MediaToolbar';
+import { FilterChipsBar } from './components/FilterChipsBar';
 import { MediaGrid } from './components/MediaGrid';
 import { SettingsDialog } from './components/SettingsDialog';
 import { useMediaStore } from './store/useMediaStore';
@@ -13,43 +11,46 @@ import { useMediaStore } from './store/useMediaStore';
 export default function App() {
   const store = useMediaStore();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   return (
-    <div className="flex h-full flex-col gap-2 overflow-y-auto p-2">
-      <Header onOpenSettings={() => setSettingsOpen(true)} />
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[#F8F9FC] text-[#171A21] font-sans">
+      {/* 1. Header (56-62px height, logo, title, dynamic reload immediately before settings) */}
+      <Header store={store} onOpenSettings={() => setSettingsOpen(true)} />
 
-      {!store.connected && (
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
-          Waiting for an active Instagram tab… open instagram.com and this panel will start
-          capturing posts automatically.
-        </div>
-      )}
+      {/* 2. Combined Sort, Filter & Auto-Scroll Toolbar (Sorter next to Auto-Scroll) */}
+      <SortAndScrollToolbar store={store} />
 
-      <Panel title="Access">
-        <div className="flex flex-wrap gap-2">
-          <Button variant="secondary" onClick={store.gotoInstagram}>
-            <ExternalLink className="h-3.5 w-3.5" />
-            Goto Instagram
-          </Button>
-          <Button variant="secondary" disabled={!store.connected} onClick={() => void store.cleanRefresh()}>
-            <RefreshCw className="h-3.5 w-3.5" />
-            Clean &amp; Refresh
-          </Button>
-        </div>
-      </Panel>
+      {/* 3. Removable Performance Filter Chips Bar (appears when filters are active) */}
+      <FilterChipsBar
+        filters={store.performanceFilters}
+        onChangeFilters={store.setPerformanceFilters}
+        onClearAll={store.clearPerformanceFilters}
+      />
 
-      <BulkDownloadPanel store={store} />
-      <AutomationPanel store={store} />
-      <FilterBar store={store} />
-      <MediaGrid store={store} />
+      {/* 4. Bulk Download & Export Toolbar */}
+      <BulkDownloadToolbar store={store} />
 
+      {/* 5. Sticky Media Selection & View Toolbar */}
+      <MediaToolbar store={store} viewMode={viewMode} onToggleViewMode={setViewMode} />
+
+      {/* 6. Main Media Viewport (takes maximum vertical space!) */}
+      <MediaGrid store={store} viewMode={viewMode} />
+
+      {/* Settings Modal */}
       {settingsOpen && (
-        <SettingsDialog onClose={() => setSettingsOpen(false)} onSaved={store.flashToast} />
+        <SettingsDialog
+          store={store}
+          onClose={() => setSettingsOpen(false)}
+          onSaved={store.flashToast}
+          onGotoInstagram={store.gotoInstagram}
+        />
       )}
 
+      {/* Temporary Toast Notifications */}
       {store.toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[3000] flex justify-center">
-          <div className="rounded-md bg-slate-800 px-4 py-2 text-xs font-medium text-white shadow-lg">
+        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[3000] flex justify-center px-4">
+          <div className="rounded-md bg-[#171A21] px-3.5 py-2 text-[12px] font-medium text-white shadow-lg backdrop-blur-md">
             {store.toast}
           </div>
         </div>

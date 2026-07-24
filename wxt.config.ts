@@ -9,14 +9,14 @@ export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
   manifest: {
-    name: 'IG Sorter & Analytics Pro',
+    name: 'FeedSort Pro',
     description:
       'Sort Instagram feed/reels/hashtag/search, analyze engagement rates, bulk download media, and export analytics to Excel.',
     // ExtPay stripped — no payment/host permissions needed beyond Instagram.
     permissions: ['activeTab', 'storage', 'sidePanel'],
     host_permissions: ['https://www.instagram.com/*'],
     action: {
-      default_title: 'IG Sorter & Analytics',
+      default_title: 'FeedSort Pro',
     },
     icons: {
       32: '/icons/32.png',

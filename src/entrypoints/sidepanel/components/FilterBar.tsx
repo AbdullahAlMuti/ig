@@ -5,7 +5,7 @@ import { DATE_RANGE_OPTIONS, SORT_OPTIONS } from '../../../shared/types/instagra
 import type { MediaStoreApi } from '../store/useMediaStore';
 
 const SELECT_CLASS =
-  'rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 focus:border-brand focus:outline-none';
+  'rounded-full border border-[#d2d2d7] bg-white px-3 py-1.5 text-[11px] font-medium text-[#1d1d1f] transition-all hover:border-[#b8b8bd] focus:border-[#0066cc] focus:outline-none focus:ring-2 focus:ring-[#0066cc]/20 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
 
 export function FilterBar({ store }: { store: MediaStoreApi }) {
   const {
@@ -24,7 +24,7 @@ export function FilterBar({ store }: { store: MediaStoreApi }) {
   return (
     <Panel title="Filter &amp; sort">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="text-xs font-medium text-slate-600" htmlFor="timeRange">
+        <label className="text-[11px] font-medium text-[#8e8e93]" htmlFor="timeRange">
           Filter:
         </label>
         <select
@@ -40,8 +40,8 @@ export function FilterBar({ store }: { store: MediaStoreApi }) {
           ))}
         </select>
 
-        <label className="text-xs font-medium text-slate-600" htmlFor="sort_by">
-          Sort by:
+        <label className="text-[11px] font-medium text-[#8e8e93]" htmlFor="sort_by">
+          Sort:
         </label>
         <select
           id="sort_by"
@@ -67,17 +67,17 @@ export function FilterBar({ store }: { store: MediaStoreApi }) {
         </Button>
       </div>
 
-      <div className="mt-2 text-xs text-slate-600">
+      <div className="mt-2.5 text-[11px] text-[#8e8e93]">
         Showing{' '}
-        <span className={filteredDiffers ? 'font-semibold text-red-500' : 'font-semibold'}>
+        <span className={filteredDiffers ? 'font-semibold text-[#ff3b30]' : 'font-semibold text-[#1d1d1f]'}>
           {counts.filtered}
         </span>{' '}
-        of {counts.all} unfiltered items
+        of {counts.all} items
       </div>
       {(warnings.missingDate || warnings.missingMetric) && (
-        <div className="mt-1 text-[11px] text-amber-600">
-          {warnings.missingDate && 'Some medias have no date and were hidden. '}
-          {warnings.missingMetric && 'Some medias lack the selected metric and sort last.'}
+        <div className="mt-1 text-[11px] text-[#ff9500]">
+          {warnings.missingDate && 'Some media have no date info and were hidden. '}
+          {warnings.missingMetric && 'Some media lack the selected metric and sort last.'}
         </div>
       )}
     </Panel>

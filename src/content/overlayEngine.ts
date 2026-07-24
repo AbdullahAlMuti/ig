@@ -40,7 +40,7 @@ export function setDownloadFn(fn: (url: string, prefix: string) => void): void {
 
 const CARD_HTML = `
 <div class="overlay">
-  <div class="stat"><span>IG Sorter</span></div>
+  <div class="stat"><span>FeedSort Pro</span></div>
   <div class="stat">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><title>Likes</title><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
     <span></span>
@@ -77,18 +77,19 @@ const CARD_HTML = `
 `;
 
 const STYLE_TEXT = `
-.ndy_ins_info { position: absolute; z-index: 1; pointer-events: none; width: 100%; }
-.overlay { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.5); width: fit-content; gap: 2px; padding: 5px; display: flex; flex-direction: column; justify-content: space-around; align-items: flex-start; pointer-events: none; }
-.overlay_download { position: absolute; top: 0; right: 0; background: rgba(0,0,0,0.5); width: fit-content; gap: 7px; padding: 1px; display: none; flex-direction: column; align-items: flex-end; pointer-events: auto; }
+.ndy_ins_info { position: absolute; z-index: 10; pointer-events: none; width: 100%; }
+.overlay { position: absolute; bottom: 8px; right: 8px; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.15); width: fit-content; gap: 3px; padding: 6px 10px; display: flex; flex-direction: column; justify-content: space-around; align-items: flex-start; pointer-events: none; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+.overlay_download { position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-radius: 9999px; border: 1px solid rgba(255, 255, 255, 0.15); width: fit-content; gap: 6px; padding: 4px 6px; display: none; flex-direction: column; align-items: center; pointer-events: auto; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25); }
 .ndy_ins_info.overlay-mode-download .overlay { display: none; }
 .ndy_ins_info.overlay-mode-download .overlay_download { display: flex; }
 .ndy_ins_info.overlay-mode-detail .overlay_download { display: flex; }
 .ndy_ins_info.overlay-mode-none { display: none; }
-.ndy_ins_info .stat { display: flex; align-items: center; color: white; gap: 5px; }
+.ndy_ins_info .stat { display: flex; align-items: center; color: rgba(255, 255, 255, 0.95); gap: 6px; font-weight: 500; }
 .ndy_ins_info .stat svg { flex-shrink: 0; }
-.ndy_ins_info .stat span { font-size: 14px; }
-.ndy_ins_info .icon { cursor: pointer; }
-.ndy_ins_info .icon:hover svg { stroke: #ffeb3b; }
+.ndy_ins_info .stat span { font-size: 11px; letter-spacing: -0.01em; }
+.ndy_ins_info .icon { cursor: pointer; padding: 3px; border-radius: 9999px; transition: transform 0.15s ease, background-color 0.15s ease; }
+.ndy_ins_info .icon:hover { background-color: rgba(255, 255, 255, 0.15); transform: scale(1.08); }
+.ndy_ins_info .icon:hover svg { stroke: #2997ff; }
 `;
 
 function injectStyles(): void {

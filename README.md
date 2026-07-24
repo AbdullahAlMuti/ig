@@ -1,6 +1,6 @@
-# IG Sorter & Analytics Pro
+# FeedSort Pro
 
-A modern, from-scratch rebuild of the "IG Sorter — Sort Feed" browser extension.
+A modern, high-performance browser extension for Instagram.
 It sorts Instagram feed / reels / hashtag / search posts, analyzes engagement
 rates, renders on-post stat overlays, bulk-downloads media, and exports
 analytics to Excel — all on `https://www.instagram.com/*`.
@@ -31,7 +31,7 @@ unlocked (the original's ExtPay licensing has been removed).
 - **Bulk download engine** — sequential image/carousel/video downloads with a
   live multi-line progress banner.
 - **Excel export** — `.xlsx` with embedded thumbnails and hyperlinks.
-- **Cancellable auto-scroll** — Swipe 1 / 10 / 30 with human-like 3–8 s gaps and
+- **Cancellable auto-scroll** — Swipe down with human-like 3–8 s gaps and
   an instant **Stop Scrolling** cancel.
 - **Custom ER weights** — configurable like/comment/repost weights with a live
   formula preview; ER recomputes across all captured posts.

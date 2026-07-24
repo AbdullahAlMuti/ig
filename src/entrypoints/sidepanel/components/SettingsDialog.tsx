@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { X } from 'lucide-react';
-import { Button } from './Button';
+import { X, ExternalLink } from 'lucide-react';
 import {
   type EngagementWeights,
   type OverlayMode,
+  type BadgeDisplayMode,
   OVERLAY_MODES,
   OVERLAY_MODE_LABELS,
+  BADGE_DISPLAY_MODES,
+  BADGE_DISPLAY_MODE_LABELS,
+  DEFAULT_BADGE_DISPLAY_MODE,
   ER_WEIGHT_KEYS,
   DEFAULT_ER_WEIGHTS,
   DEFAULT_OVERLAY_MODE,
@@ -17,10 +20,13 @@ import {
   formatErFormula,
 } from '../../../shared/utils/engagementCalculator';
 import { RUNTIME_MSG } from '../../../shared/types/messages';
+import type { MediaStoreApi } from '../store/useMediaStore';
 
 interface SettingsDialogProps {
+  store?: MediaStoreApi;
   onClose: () => void;
   onSaved?: (message: string) => void;
+  onGotoInstagram?: () => void;
 }
 
 const WEIGHT_LABELS: Record<(typeof ER_WEIGHT_KEYS)[number], string> = {
@@ -46,19 +52,26 @@ async function broadcast(mode: OverlayMode, weights: EngagementWeights): Promise
   }
 }
 
-export function SettingsDialog({ onClose, onSaved }: SettingsDialogProps) {
+export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: SettingsDialogProps) {
   const [mode, setMode] = useState<OverlayMode>(DEFAULT_OVERLAY_MODE);
+  const [badgeMode, setBadgeMode] = useState<BadgeDisplayMode>(
+    store?.badgeDisplayMode ?? DEFAULT_BADGE_DISPLAY_MODE,
+  );
   const [weights, setWeights] = useState<EngagementWeights>({ ...DEFAULT_ER_WEIGHTS });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     let active = true;
     chrome.storage.local
-      .get([STORAGE_KEYS.overlayMode, STORAGE_KEYS.erWeights])
+      .get([STORAGE_KEYS.overlayMode, STORAGE_KEYS.erWeights, STORAGE_KEYS.badgeDisplayMode])
       .then((stored) => {
         if (!active) return;
         const rawMode = stored[STORAGE_KEYS.overlayMode] as OverlayMode | undefined;
         if (OVERLAY_MODES.includes(rawMode as OverlayMode)) setMode(rawMode as OverlayMode);
+        const rawBadgeMode = stored[STORAGE_KEYS.badgeDisplayMode] as BadgeDisplayMode | undefined;
+        if (BADGE_DISPLAY_MODES.includes(rawBadgeMode as BadgeDisplayMode)) {
+          setBadgeMode(rawBadgeMode as BadgeDisplayMode);
+        }
         const rawWeights = stored[STORAGE_KEYS.erWeights];
         if (areWeightsValid(rawWeights)) setWeights(normalizeWeights(rawWeights));
       })
@@ -78,7 +91,11 @@ export function SettingsDialog({ onClose, onSaved }: SettingsDialogProps) {
       await chrome.storage.local.set({
         [STORAGE_KEYS.overlayMode]: mode,
         [STORAGE_KEYS.erWeights]: normalized,
+        [STORAGE_KEYS.badgeDisplayMode]: badgeMode,
       });
+      if (store?.setBadgeDisplayMode) {
+        store.setBadgeDisplayMode(badgeMode);
+      }
       await broadcast(mode, normalized);
       onSaved?.('Settings updated');
       onClose();
@@ -91,28 +108,45 @@ export function SettingsDialog({ onClose, onSaved }: SettingsDialogProps) {
 
   return (
     <div
-      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/40 p-4"
+      className="fixed inset-0 z-[2100] flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
-        className="flex w-80 max-w-full flex-col gap-4 rounded-lg bg-white p-5 shadow-2xl"
+        className="flex w-[340px] max-w-full flex-col gap-3.5 rounded-lg border border-[#E6E8EC] bg-white p-4 shadow-lg text-[#171A21]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-800">Settings</h3>
+        <div className="flex items-center justify-between border-b border-[#E6E8EC] pb-2.5">
+          <h3 className="text-[14px] font-semibold text-[#171A21]">Settings</h3>
           <button
             onClick={onClose}
-            className="rounded p-1 text-slate-500 hover:bg-slate-100"
+            className="flex h-6 w-6 items-center justify-center rounded text-[#667085] hover:bg-[#F4F5F7] hover:text-[#171A21]"
             aria-label="Close"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        <label className="flex flex-col gap-1.5 text-sm font-semibold text-slate-700">
-          Overlay display
+        {/* 1. Performance Badge Display Mode */}
+        <label className="flex flex-col gap-1 text-[12px] font-medium text-[#171A21]">
+          Performance badge display
           <select
-            className="rounded-md border border-slate-300 px-2 py-1.5 text-sm font-normal focus:border-brand focus:outline-none"
+            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none"
+            value={badgeMode}
+            onChange={(e) => setBadgeMode(e.target.value as BadgeDisplayMode)}
+          >
+            {BADGE_DISPLAY_MODES.map((b) => (
+              <option key={b} value={b}>
+                {BADGE_DISPLAY_MODE_LABELS[b]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {/* 2. Instagram On-Post Overlay Display Mode */}
+        <label className="flex flex-col gap-1 text-[12px] font-medium text-[#171A21]">
+          On-post overlay mode (on Instagram)
+          <select
+            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none"
             value={mode}
             onChange={(e) => setMode(e.target.value as OverlayMode)}
           >
@@ -124,14 +158,15 @@ export function SettingsDialog({ onClose, onSaved }: SettingsDialogProps) {
           </select>
         </label>
 
-        <div className="flex flex-col gap-2">
-          <div className="text-sm font-semibold text-slate-700">Engagement formula</div>
-          <p className="text-xs text-slate-500">
-            Adjust how likes, comments and reposts contribute to ER.
+        {/* 3. Engagement Rate Formula Weights */}
+        <div className="flex flex-col gap-1.5">
+          <div className="text-[12px] font-medium text-[#171A21]">Engagement formula weights</div>
+          <p className="text-[11px] text-[#667085]">
+            Weights for likes, comments and reposts in ER math.
           </p>
           <div className="grid grid-cols-3 gap-2">
             {ER_WEIGHT_KEYS.map((key) => (
-              <label key={key} className="flex flex-col gap-1 text-[11px] text-slate-600">
+              <label key={key} className="flex flex-col gap-1 text-[10px] font-medium text-[#667085]">
                 {WEIGHT_LABELS[key]}
                 <input
                   type="number"
@@ -141,23 +176,45 @@ export function SettingsDialog({ onClose, onSaved }: SettingsDialogProps) {
                   onChange={(e) =>
                     setWeights((w) => ({ ...w, [key]: e.currentTarget.valueAsNumber }))
                   }
-                  className="rounded-md border border-slate-300 px-2 py-1 text-sm focus:border-brand focus:outline-none"
+                  className="h-7 rounded-md border border-[#E6E8EC] bg-white px-2 text-[11px] font-medium text-[#171A21] focus:border-[#6558E8] focus:outline-none"
                 />
               </label>
             ))}
           </div>
-          <div className="rounded-md bg-slate-100 p-2 text-[11px] text-slate-700">
+          <div className="mt-1 rounded-md border border-[#E6E8EC] bg-[#F8F9FC] p-2 font-mono text-[10px] text-[#171A21]">
             {formatErFormula(weights)}
           </div>
         </div>
 
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={onClose}>
+        {onGotoInstagram && (
+          <div className="border-t border-[#E6E8EC] pt-2.5">
+            <button
+              onClick={() => {
+                onGotoInstagram();
+                onClose();
+              }}
+              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#E6E8EC] bg-[#F8F9FC] text-[12px] font-medium text-[#6558E8] hover:bg-[#6558E8]/10 transition-colors"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>Open Instagram</span>
+            </button>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 border-t border-[#E6E8EC] pt-2.5">
+          <button
+            onClick={onClose}
+            className="flex h-8 items-center rounded-md border border-[#E6E8EC] bg-white px-3 text-[12px] font-medium text-[#171A21] hover:bg-[#F4F5F7]"
+          >
             Cancel
-          </Button>
-          <Button variant="primary" disabled={!valid || saving} onClick={() => void handleSave()}>
+          </button>
+          <button
+            disabled={!valid || saving}
+            onClick={() => void handleSave()}
+            className="flex h-8 items-center rounded-md bg-[#6558E8] px-3 text-[12px] font-medium text-white hover:bg-[#5548D8] disabled:opacity-50"
+          >
             {saving ? 'Saving…' : 'Save'}
-          </Button>
+          </button>
         </div>
       </div>
     </div>
