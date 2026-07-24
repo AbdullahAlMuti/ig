@@ -57,11 +57,11 @@ export function Header({ store, onOpenSettings }: HeaderProps) {
             <span className="text-[14px] font-semibold text-[#171A21] tracking-tight truncate">FeedSort Pro</span>
             <span className="rounded bg-[#6558E8]/10 px-1 py-0.2 text-[9px] font-medium text-[#6558E8]">v{version}</span>
           </div>
-          <span className="text-[11px] font-normal text-[#667085] truncate">IG Sorter &amp; Analytics</span>
+          <span className="text-[11px] font-normal text-[#667085] truncate">Feed Sorter &amp; Analytics</span>
         </div>
       </div>
 
-      {/* Right: Actions in EXACT order [Open IG if disconnected] -> [Reload] -> [Settings] */}
+      {/* Right: Actions in EXACT order [Open Instagram if disconnected] -> [Reload] -> [Settings] */}
       <div className="flex items-center gap-1 shrink-0">
         {!store.connected && (
           <button
@@ -70,7 +70,7 @@ export function Header({ store, onOpenSettings }: HeaderProps) {
             title="Open Instagram in a new tab"
           >
             <ExternalLink className="h-3.5 w-3.5" />
-            <span>Open IG</span>
+            <span>Open Instagram</span>
           </button>
         )}
 
