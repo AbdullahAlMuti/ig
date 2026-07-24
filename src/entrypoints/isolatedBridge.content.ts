@@ -1,16 +1,11 @@
 /**
  * ISOLATED-world content script — the chrome.runtime broker between the MAIN
- * world (which can't use extension APIs) and the background/side panel, plus
- * the cancellable auto-scroll controller.
+ * world and the background/side panel, plus the cancellable auto-scroll controller.
  *
- *  MAIN → here (DOM events): captured snapshot (`ndy_ig_info`), download-queue
- *  length (`ndy_dq`) → relayed to background / side panel via chrome.runtime.
- *
- *  panel/tab → here (chrome.runtime): swipe / top / stop-scroll / refresh /
- *  single-download / overlay-mode / ER-weights → actioned or forwarded to MAIN
- *  (DOM event or window.postMessage).
- *
- *  storage.local changes → forwarded to MAIN as window.postMessage.
+ * Security Hardening:
+ *  - Per-session unpredictable capability token generated via crypto.randomUUID()
+ *  - Strict payload validation before relaying or acting on messages
+ *  - Correct return false/true listener behavior
  */
 import { ScrollController } from '../shared/utils/scrollController';
 import {
@@ -29,8 +24,17 @@ import {
   POST_MSG_SOURCE,
   type RuntimeMessage,
 } from '../shared/types/messages';
+import { validateMediaDownloadUrl, sanitizeDownloadFilename } from '../shared/utils/urlValidation';
+import {
+  validateDownloadPayload,
+  validateOverlayModeValue,
+  validateEngagementWeightsPayload,
+  validateSnapshotRootPayload,
+} from '../shared/utils/messageValidation';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+const SESSION_TOKEN = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
 
 export default defineContentScript({
   matches: ['https://www.instagram.com/*'],
@@ -42,53 +46,98 @@ export default defineContentScript({
     document.addEventListener(DOM_EVENT.info, (event) => {
       if (document.visibilityState !== 'visible') return;
       const root = (event as CustomEvent).detail?.root ?? null;
+      const valRes = validateSnapshotRootPayload(root);
+      if (!valRes.valid) {
+        console.warn(`[isolatedBridge] Rejected invalid snapshot: ${valRes.error}`);
+        return;
+      }
       safeSend({ type: RUNTIME_MSG.bgIg, info: root });
     });
 
     document.addEventListener(DOM_EVENT.downloadQueue, (event) => {
       const count = Number((event as CustomEvent).detail?.count);
-      safeSend({ type: RUNTIME_MSG.downloadQueue, count: Number.isFinite(count) ? count : 0 });
+      safeSend({ type: RUNTIME_MSG.downloadQueue, count: Number.isFinite(count) ? Math.max(0, count) : 0 });
     });
 
     /* ---- panel / tab → here ---- */
     chrome.runtime.onMessage.addListener((message: RuntimeMessage, _sender, sendResponse) => {
+      if (!message || typeof message !== 'object') {
+        sendResponse({ ok: false, error: 'Invalid message structure' });
+        return false;
+      }
+
       switch (message.type) {
-        case RUNTIME_MSG.swipe:
-          void scroller.swipe(message.count);
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.top:
+        case RUNTIME_MSG.swipe: {
+          const count = typeof message.count === 'number' && Number.isFinite(message.count) ? message.count : 500;
+          void scroller.swipe(count);
+          sendResponse({ ok: true });
+          return false;
+        }
+        case RUNTIME_MSG.top: {
           scroller.scrollToTop();
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.stopScroll:
+          sendResponse({ ok: true });
+          return false;
+        }
+        case RUNTIME_MSG.stopScroll: {
           scroller.cancel();
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.refresh:
+          sendResponse({ ok: true });
+          return false;
+        }
+        case RUNTIME_MSG.refresh: {
           window.location.reload();
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.contentDown:
+          sendResponse({ ok: true });
+          return false;
+        }
+        case RUNTIME_MSG.contentDown: {
+          const valRes = validateDownloadPayload(message);
+          if (!valRes.valid) {
+            sendResponse({ ok: false, error: valRes.error });
+            return false;
+          }
+
+          const urlVal = validateMediaDownloadUrl(message.url);
+          if (!urlVal.valid) {
+            sendResponse({ ok: false, error: urlVal.reason });
+            return false;
+          }
+
           document.dispatchEvent(
             new CustomEvent(DOM_EVENT.download, {
-              detail: { video_src: { video_url: message.url, prefix: message.prefix } },
+              detail: {
+                token: SESSION_TOKEN,
+                video_src: {
+                  video_url: message.url,
+                  prefix: sanitizeDownloadFilename(message.prefix),
+                },
+              },
             }),
           );
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.overlayModeChanged:
-          if (OVERLAY_MODES.includes(message.value)) postOverlayMode(message.value);
-          sendResponse('ok');
-          break;
-        case RUNTIME_MSG.erWeightsChanged:
-          if (areWeightsValid(message.value)) postWeights(message.value);
-          sendResponse('ok');
-          break;
-        default:
-          break;
+          sendResponse({ ok: true });
+          return false;
+        }
+        case RUNTIME_MSG.overlayModeChanged: {
+          if (validateOverlayModeValue(message.value)) {
+            postOverlayMode(message.value);
+            sendResponse({ ok: true });
+          } else {
+            sendResponse({ ok: false, error: 'Invalid overlay mode' });
+          }
+          return false;
+        }
+        case RUNTIME_MSG.erWeightsChanged: {
+          if (validateEngagementWeightsPayload(message.value)) {
+            postWeights(message.value);
+            sendResponse({ ok: true });
+          } else {
+            sendResponse({ ok: false, error: 'Invalid engagement weights' });
+          }
+          return false;
+        }
+        default: {
+          sendResponse({ ok: false, error: 'Unhandled message type' });
+          return false;
+        }
       }
-      return true;
     });
 
     /* ---- storage.local → MAIN ---- */
@@ -123,12 +172,12 @@ function safeSend(message: RuntimeMessage): void {
 }
 
 function postOverlayMode(mode: OverlayMode): void {
-  window.postMessage({ source: POST_MSG_SOURCE, type: POST_MSG.overlayMode, mode }, '*');
+  window.postMessage({ source: POST_MSG_SOURCE, token: SESSION_TOKEN, type: POST_MSG.overlayMode, mode }, '*');
 }
 
 function postWeights(weights: EngagementWeights): void {
   window.postMessage(
-    { source: POST_MSG_SOURCE, type: POST_MSG.erWeights, weights: normalizeWeights(weights) },
+    { source: POST_MSG_SOURCE, token: SESSION_TOKEN, type: POST_MSG.erWeights, weights: normalizeWeights(weights) },
     '*',
   );
 }
