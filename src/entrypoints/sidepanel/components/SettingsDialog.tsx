@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ExternalLink } from 'lucide-react';
 import {
   type EngagementWeights,
@@ -59,6 +59,18 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
   );
   const [weights, setWeights] = useState<EngagementWeights>({ ...DEFAULT_ER_WEIGHTS });
   const [saving, setSaving] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Escape key & focus management
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     let active = true;
@@ -112,15 +124,19 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="settings-dialog-title"
         className="flex w-[340px] max-w-full flex-col gap-3.5 rounded-lg border border-[#E6E8EC] bg-white p-4 shadow-lg text-[#171A21]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-[#E6E8EC] pb-2.5">
-          <h3 className="text-[14px] font-semibold text-[#171A21]">Settings</h3>
+          <h3 id="settings-dialog-title" className="text-[14px] font-semibold text-[#171A21]">Settings</h3>
           <button
             onClick={onClose}
-            className="flex h-6 w-6 items-center justify-center rounded text-[#667085] hover:bg-[#F4F5F7] hover:text-[#171A21]"
-            aria-label="Close"
+            className="flex h-7 w-7 items-center justify-center rounded text-[#667085] hover:bg-[#F4F5F7] hover:text-[#171A21] focus-visible:ring-2 focus-visible:ring-[#6558E8]"
+            aria-label="Close settings dialog"
           >
             <X className="h-4 w-4" />
           </button>
@@ -130,7 +146,7 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
         <label className="flex flex-col gap-1 text-[12px] font-medium text-[#171A21]">
           Performance badge display
           <select
-            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none"
+            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6558E8]"
             value={badgeMode}
             onChange={(e) => setBadgeMode(e.target.value as BadgeDisplayMode)}
           >
@@ -146,7 +162,7 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
         <label className="flex flex-col gap-1 text-[12px] font-medium text-[#171A21]">
           On-post overlay mode (on Instagram)
           <select
-            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none"
+            className="h-8 rounded-md border border-[#E6E8EC] bg-white px-2.5 text-[12px] text-[#171A21] focus:border-[#6558E8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6558E8]"
             value={mode}
             onChange={(e) => setMode(e.target.value as OverlayMode)}
           >
@@ -176,7 +192,7 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
                   onChange={(e) =>
                     setWeights((w) => ({ ...w, [key]: e.currentTarget.valueAsNumber }))
                   }
-                  className="h-7 rounded-md border border-[#E6E8EC] bg-white px-2 text-[11px] font-medium text-[#171A21] focus:border-[#6558E8] focus:outline-none"
+                  className="h-7 rounded-md border border-[#E6E8EC] bg-white px-2 text-[11px] font-medium text-[#171A21] focus:border-[#6558E8] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#6558E8]"
                 />
               </label>
             ))}
@@ -193,7 +209,7 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
                 onGotoInstagram();
                 onClose();
               }}
-              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#E6E8EC] bg-[#F8F9FC] text-[12px] font-medium text-[#6558E8] hover:bg-[#6558E8]/10 transition-colors"
+              className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-[#E6E8EC] bg-[#F8F9FC] text-[12px] font-medium text-[#6558E8] hover:bg-[#6558E8]/10 focus-visible:ring-2 focus-visible:ring-[#6558E8] transition-colors"
             >
               <ExternalLink className="h-3.5 w-3.5" />
               <span>Open Instagram</span>
@@ -204,14 +220,14 @@ export function SettingsDialog({ store, onClose, onSaved, onGotoInstagram }: Set
         <div className="flex justify-end gap-2 border-t border-[#E6E8EC] pt-2.5">
           <button
             onClick={onClose}
-            className="flex h-8 items-center rounded-md border border-[#E6E8EC] bg-white px-3 text-[12px] font-medium text-[#171A21] hover:bg-[#F4F5F7]"
+            className="flex h-8 items-center rounded-md border border-[#E6E8EC] bg-white px-3 text-[12px] font-medium text-[#171A21] hover:bg-[#F4F5F7] focus-visible:ring-2 focus-visible:ring-[#6558E8]"
           >
             Cancel
           </button>
           <button
             disabled={!valid || saving}
             onClick={() => void handleSave()}
-            className="flex h-8 items-center rounded-md bg-[#6558E8] px-3 text-[12px] font-medium text-white hover:bg-[#5548D8] disabled:opacity-50"
+            className="flex h-8 items-center rounded-md bg-[#6558E8] px-3 text-[12px] font-medium text-white hover:bg-[#5548D8] focus-visible:ring-2 focus-visible:ring-[#6558E8] disabled:opacity-50"
           >
             {saving ? 'Saving…' : 'Save'}
           </button>

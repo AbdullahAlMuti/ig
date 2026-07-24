@@ -69,21 +69,33 @@ export function MediaDetailsModal({ item, rankData, store, onClose }: MediaDetai
     }
   };
 
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <div
       className="fixed inset-0 z-[2200] flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs"
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="details-modal-title"
         className="flex w-[340px] max-w-full flex-col max-h-[90vh] overflow-y-auto rounded-lg border border-[#E6E8EC] bg-white p-4 shadow-xl text-[#171A21]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#E6E8EC] pb-2.5">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-[13px] font-semibold">
+            <h3 id="details-modal-title" className="font-mono text-[13px] font-semibold">
               {item.username ? `@${item.username}` : item.code}
-            </span>
+            </h3>
             {item.mediaType && (
               <span className="rounded bg-[#F4F5F7] px-1.5 py-0.5 text-[10px] uppercase font-medium text-[#667085]">
                 {item.mediaType}

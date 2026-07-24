@@ -49,7 +49,12 @@ export default function App() {
 
       {/* Temporary Toast Notifications */}
       {store.toast && (
-        <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[3000] flex justify-center px-4">
+        <div
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className="pointer-events-none fixed inset-x-0 bottom-4 z-[3000] flex justify-center px-4"
+        >
           <div className="rounded-md bg-[#171A21] px-3.5 py-2 text-[12px] font-medium text-white shadow-lg backdrop-blur-md">
             {store.toast}
           </div>
