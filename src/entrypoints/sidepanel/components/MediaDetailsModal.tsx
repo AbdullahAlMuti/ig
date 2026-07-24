@@ -50,14 +50,23 @@ export function MediaDetailsModal({ item, rankData, store, onClose }: MediaDetai
       store.flashToast('No downloadable media found');
       return;
     }
-    for (const entry of entries) {
-      await chrome.runtime.sendMessage({
-        type: 'ndy_content_down',
-        url: entry.url,
-        prefix: entry.prefix,
-      });
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab?.id) {
+      store.flashToast('Instagram tab is no longer available');
+      return;
     }
-    store.flashToast('Download queued');
+    for (const entry of entries) {
+      chrome.tabs.sendMessage(
+        tab.id,
+        {
+          type: 'ndy_content_down',
+          url: entry.url,
+          prefix: entry.prefix,
+        },
+        () => void chrome.runtime.lastError,
+      );
+    }
+    store.flashToast('Download started');
   };
 
   return (
@@ -134,7 +143,7 @@ export function MediaDetailsModal({ item, rankData, store, onClose }: MediaDetai
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="flex items-center justify-between rounded border border-[#E6E8EC] bg-[#F8F9FC] px-2.5 py-1.5">
                 <span className="text-[#667085]">Overall Rank</span>
-                <span className="font-semibold text-[#171A21]">#{rankData.overallRank} of {store.counts.filtered}</span>
+                <span className="font-semibold text-[#171A21]">#{rankData.overallRank} of {store.counts.base}</span>
               </div>
               <div className="flex items-center justify-between rounded border border-[#E6E8EC] bg-[#F8F9FC] px-2.5 py-1.5">
                 <span className="text-[#667085]">ER Rank</span>

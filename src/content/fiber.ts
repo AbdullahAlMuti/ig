@@ -58,7 +58,10 @@ export function resolveViaFiber(
   let node: Element | null = startNode;
   for (let depth = 0; depth <= maxDepth && node; depth++) {
     const props = getReactProps(node);
-    if (!props) return null;
+    if (!props) {
+      node = node.parentElement;
+      continue;
+    }
 
     const child = props.children?.props;
     if (child) {

@@ -18,7 +18,18 @@ export interface DownloadEntry {
   prefix: string;
 }
 
-/** Expand a post into deduped, ordered downloadable files. */
+const MIME_EXTENSION_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/heic': 'heic',
+  'video/mp4': 'mp4',
+  'video/quicktime': 'mov',
+  'video/webm': 'webm',
+};
+
+/** Expand a post into deduped, ordered downloadable files (1-indexed for carousels). */
 export function buildDownloadEntries(item: InstagramMediaItem): DownloadEntry[] {
   if (!item || !item.code) return [];
   const urls: string[] = [];
@@ -36,22 +47,29 @@ export function buildDownloadEntries(item: InstagramMediaItem): DownloadEntry[] 
   const unique = Array.from(new Set(urls));
   return unique.map((url, index) => ({
     url,
-    prefix: unique.length > 1 ? `${item.code}_${index}` : item.code,
+    prefix: unique.length > 1 ? `${item.code}_${index + 1}` : item.code,
   }));
 }
 
-/** Map a Content-Type / URL to a file extension. */
+/** Map a Content-Type / URL to a clean file extension. */
 export function extensionFor(contentType: string, url: string): string {
-  const subtype = contentType.includes('/') ? contentType.split('/')[1] : '';
-  const clean = subtype.split('+')[0].trim().toLowerCase();
-  if (clean) return clean === 'jpg' ? 'jpeg' : clean;
-  // Fall back to the URL hint, else assume mp4 (matches original default).
+  const mime = contentType.split(';')[0].trim().toLowerCase();
+  if (MIME_EXTENSION_MAP[mime]) {
+    return MIME_EXTENSION_MAP[mime];
+  }
+
+  // Fall back to sniffing the URL query/filename hint
   const match = /\.(mp4|jpg|jpeg|png|webp|heic|gif|mov|webm)(?:[?#]|$)/i.exec(url);
-  return match ? match[1].toLowerCase() : 'mp4';
+  if (match) {
+    const ext = match[1].toLowerCase();
+    return ext === 'jpeg' ? 'jpg' : ext;
+  }
+
+  // Safe default for Instagram media
+  return 'mp4';
 }
 
 function buildFilename(url: string, prefix: string, ext: string): string {
-  // blob: URLs have no meaningful name — use the last path segment.
   if (url.startsWith('blob')) {
     const seg = url.split('/').pop() || prefix;
     return `${seg}.${ext}`;
@@ -59,7 +77,7 @@ function buildFilename(url: string, prefix: string, ext: string): string {
   return `${prefix}.${ext}`;
 }
 
-/** Save a Blob to disk via a transient object URL + anchor click. */
+/** Save a Blob to disk via a transient object URL + anchor click with deferred revocation. */
 export function triggerBlobDownload(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -68,7 +86,9 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  URL.revokeObjectURL(objectUrl);
+
+  // Deferred revocation to ensure browser download starts safely across all engines
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
 }
 
 /**
@@ -97,7 +117,7 @@ export class MediaDownloader {
       if (![200, 206].includes(res.status)) {
         throw new Error(`Non 200/206 response: ${res.status}`);
       }
-      const contentType = (res.headers.get('Content-Type') || 'video/mp4').split(';')[0];
+      const contentType = res.headers.get('Content-Type') || 'video/mp4';
       const ext = extensionFor(contentType, url);
       const blob = await res.blob();
       const typed =

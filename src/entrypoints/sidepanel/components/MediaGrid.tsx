@@ -15,6 +15,7 @@ import {
   Rocket,
   Star,
   Info,
+  Sparkles,
 } from 'lucide-react';
 import type { InstagramMediaItem, BadgeDisplayMode } from '../../../shared/types/instagram';
 import { formatCompact, formatDate } from '../../../shared/utils/format';
