@@ -1,109 +1,81 @@
 # FeedSort Pro
 
-A modern, high-performance browser extension for Instagram.
-It sorts Instagram feed / reels / hashtag / search posts, analyzes engagement
-rates, renders on-post stat overlays, bulk-downloads media, and exports
-analytics to Excel — all on `https://www.instagram.com/*`.
+**FeedSort Pro** is a modern, high-performance Chrome extension for Instagram analytics, sorting, performance ranking, and media organization.
 
-This is a **Manifest V3** extension built with **WXT + TypeScript (strict) +
-React 18 + Tailwind CSS**, virtualized with **@tanstack/react-virtual** and
-exporting via **ExcelJS**. It is the **Free Edition**: every feature is
-unlocked (the original's ExtPay licensing has been removed).
-
-> Feature parity target: v2.3.9 of the original extension. See
-> `docs/PARITY.md`-style notes in the project thread for the reverse-engineered
-> contract (message names, storage keys, endpoints, data model).
+Sort Instagram feeds, reels, hashtag pages, and search results by engagement, analyze performance metrics with intelligent visual badges, export rich analytics to Excel, and download media seamlessly — all directly on `https://www.instagram.com/*`.
 
 ---
 
-## Features
+## Key Features
 
-- **Network capture** — patches `fetch` **and** `XMLHttpRequest` at
-  `document_start` in the MAIN world to parse Instagram's GraphQL/REST media
-  objects, plus inline JSON preloads, into a typed model.
-- **On-post overlays** — a `MutationObserver` draws likes / comments / reposts /
-  date / views / ER badges onto posts across feed, explore, reels and profiles,
-  with one-click image / carousel / video download buttons.
-- **Side panel** (`sidePanel` API) — header + settings, access bar, bulk
-  downloader, automation controls, filter/sort bar, and a virtualized grid.
-- **Sort & filter** — date ranges (7d…10y) and multi-criteria sort (likes,
-  comments, reposts, date, views, ER, default).
-- **Bulk download engine** — sequential image/carousel/video downloads with a
-  live multi-line progress banner.
-- **Excel export** — `.xlsx` with embedded thumbnails and hyperlinks.
-- **Cancellable auto-scroll** — Swipe down with human-like 3–8 s gaps and
-  an instant **Stop Scrolling** cancel.
-- **Custom ER weights** — configurable like/comment/repost weights with a live
-  formula preview; ER recomputes across all captured posts.
+- **Selective Performance Ranking**: Human-friendly visual ranking badges (`Top Performer`, `Most Engaged`, `Most Liked`, `Most Viewed`, `Trending`, `Best Reach`, `Rising Post`, `High Performer`) powered by logarithmic normalization.
+- **Multi-Select Performance Filters**: Filter media cards by performance badge categories (`Trending + Rising`, `Top Performer`, `No Badge`), performance score (0–100), overall rank limits (Top 3, Top 5, Top 10), and engagement rate ranges.
+- **Live Network & Media Capture**: Intercepts media objects in real-time to analyze engagement rates and metrics.
+- **On-Post Stat Overlays**: Displays unobtrusive stats, engagement badges, and quick download buttons directly on Instagram posts across home feed, explore, reels, and profiles.
+- **Compact Side Panel Utility**: High-density browser utility interface built for fast sorting, date range filtering, search, and bulk operations.
+- **Bulk Media Downloader**: Download images, videos, and carousel slides with progress tracking.
+- **Excel Analytics Exporter**: Export complete media analytics to `.xlsx` spreadsheets including engagement rates, performance scores, overall ranks, like counts, view counts, and post URLs.
+- **Continuous Auto-Scroll**: Hands-free feed scrolling with instant cancel control.
+- **Custom Engagement Formulas**: Configurable weights for likes, comments, and reposts.
 
-## Tech stack
+---
 
-| Concern        | Choice                          |
-| -------------- | ------------------------------- |
-| Manifest       | MV3                             |
-| Framework      | [WXT](https://wxt.dev)          |
-| Language       | TypeScript (`strict`)           |
-| UI             | React 18 + Tailwind CSS         |
-| Virtualization | `@tanstack/react-virtual`       |
-| Excel          | `exceljs`                       |
-| Icons          | `lucide-react`                  |
+## Tech Stack
 
-## Project structure
+| Component | Technology |
+| --- | --- |
+| Extension Manifest | Chrome Manifest V3 |
+| Framework | [WXT](https://wxt.dev) |
+| Core Language | TypeScript (`strict`) |
+| UI Framework | React 18 + Tailwind CSS |
+| Grid Virtualization | `@tanstack/react-virtual` |
+| Spreadsheet Engine | `exceljs` |
+| Icon Library | `lucide-react` |
 
-```
-ig-sorter-rebuild/
-├── wxt.config.ts                 # WXT config (srcDir: src, React module, manifest)
-├── tailwind.config.js
-├── src/
-│   ├── entrypoints/
-│   │   ├── background.ts                    # service worker (side panel + relay)
-│   │   ├── mainWorldInterceptor.content.ts  # MAIN world: network + overlay + downloader
-│   │   ├── isolatedBridge.content.ts        # ISOLATED world: runtime broker + scroll
-│   │   └── sidepanel/                        # React side panel (index.html, App, components, store)
-│   ├── content/                  # MAIN-world logic modules
-│   │   ├── mediaStore.ts         # capture store + indexes
-│   │   ├── mediaParser.ts        # raw payload → InstagramMediaItem, endpoint parsers
-│   │   ├── preloadScanner.ts     # inline JSON preload scanning
-│   │   ├── fiber.ts              # React Fiber shortcode resolution
-│   │   ├── overlayEngine.ts      # MutationObserver overlay rendering
-│   │   └── headers.ts            # x-ig-app-id capture
-│   └── shared/
-│       ├── types/                # instagram.ts (model) + messages.ts (protocol)
-│       └── utils/                # engagement, sort/filter, downloader, excel, scroll, format
-└── package.json
-```
+---
 
-## Getting started
+## Getting Started
+
+### Installation & Development
 
 ```bash
-npm install          # installs deps and runs `wxt prepare`
-npm run dev          # dev build with HMR (Chrome)
-npm run build        # production build → .output/chrome-mv3
-npm run zip          # zip the production build for distribution
-npm run compile      # type-check only (tsc --noEmit)
+# Install dependencies & prepare icons
+npm install
+
+# Run development mode with HMR (Chrome)
+npm run dev
+
+# Build production extension (.output/chrome-mv3)
+npm run build
+
+# Package extension zip for release
+npm run zip
+
+# Type-check TypeScript
+npm run compile
 ```
 
-### Load the unpacked extension
+### Loading Unpacked in Chrome
 
-1. `npm run build`
-2. Open `chrome://extensions` and enable **Developer mode**.
-3. **Load unpacked** → select `.output/chrome-mv3`.
-4. Open `https://www.instagram.com/`, then click the extension icon to open the
-   side panel. Scroll (or use the swipe buttons) to capture posts.
+1. Run `npm run build`.
+2. Open Chrome and navigate to `chrome://extensions`.
+3. Enable **Developer mode** in the top right corner.
+4. Click **Load unpacked** and select the `.output/chrome-mv3` directory.
+5. Navigate to `https://www.instagram.com/` and open the **FeedSort Pro** side panel.
 
-> **Note:** Instagram's internal API shapes and DOM structure are undocumented
-> and change frequently. If capture stops working after an Instagram update, the
-> selectors/paths in `src/content/mediaParser.ts`, `preloadScanner.ts` and
-> `overlayEngine.ts` are where fixes go.
+---
 
 ## Permissions
 
-- `activeTab`, `storage`, `sidePanel`
-- Host: `https://www.instagram.com/*`
+- **Permissions**: `activeTab`, `storage`, `sidePanel`
+- **Host Permissions**: `https://www.instagram.com/*`
 
-No remote code, no analytics, no payment SDK.
+*No remote code, no external analytics, no telemetry, and no third-party tracking.*
 
-## License
+---
 
-For personal/educational use. Instagram is a trademark of its respective owner;
-this project is not affiliated with or endorsed by Instagram/Meta.
+## License & Disclaimer
+
+Distributed under the MIT License.
+
+*FeedSort Pro is an independent project and is not affiliated with, authorized, maintained, sponsored, or endorsed by Instagram, Meta Platforms, Inc., or any of its affiliates.*
