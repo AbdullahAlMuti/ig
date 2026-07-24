@@ -1,16 +1,11 @@
 /**
- * Binary media downloader + per-post download planning.
+ * Binary media downloader + per-post download planning with strict validation.
  *
- * The actual byte transfer runs in the MAIN world (same origin as Instagram,
- * so `fetch` carries the page's credentials and CDN cookies): the URL is
- * fetched to a Blob, the MIME type is sniffed from the response, and a
- * programmatic `<a download>` click saves the file. An active-task counter is
- * surfaced so the side panel can pace bulk downloads.
- *
- * `buildDownloadEntries` is a pure planner (used by the panel) that expands one
- * post into its concrete downloadable files (carousel slides, or image+video).
+ * Runs download transfers with concurrency control, duplicate removal,
+ * strict URL validation, and filename sanitization.
  */
 import type { InstagramMediaItem } from '../types/instagram';
+import { validateMediaDownloadUrl, sanitizeDownloadFilename } from './urlValidation';
 
 export interface DownloadEntry {
   url: string;
@@ -29,25 +24,37 @@ const MIME_EXTENSION_MAP: Record<string, string> = {
   'video/webm': 'webm',
 };
 
-/** Expand a post into deduped, ordered downloadable files (1-indexed for carousels). */
+/** Expand a post into deduped, ordered, validated downloadable files (1-indexed for carousels). */
 export function buildDownloadEntries(item: InstagramMediaItem): DownloadEntry[] {
   if (!item || !item.code) return [];
-  const urls: string[] = [];
+  const safeCode = sanitizeDownloadFilename(item.code);
+  const rawUrls: string[] = [];
 
   if (Array.isArray(item.carouselMedia) && item.carouselMedia.length > 0) {
     for (const raw of item.carouselMedia) {
       const url = (raw ?? '').trim();
-      if (url) urls.push(url);
+      if (url && validateMediaDownloadUrl(url).valid) {
+        rawUrls.push(url);
+      }
     }
   } else {
-    if (item.imgOrigin) urls.push(item.imgOrigin);
-    if (item.videoUrl) urls.push(item.videoUrl);
+    if (item.imgOrigin && validateMediaDownloadUrl(item.imgOrigin).valid) {
+      rawUrls.push(item.imgOrigin);
+    }
+    if (item.videoUrl && validateMediaDownloadUrl(item.videoUrl).valid) {
+      rawUrls.push(item.videoUrl);
+    }
   }
 
-  const unique = Array.from(new Set(urls));
-  return unique.map((url, index) => ({
+  // Deduplicate URLs
+  const uniqueUrls = Array.from(new Set(rawUrls));
+
+  // Limit max files per item to 100
+  const cappedUrls = uniqueUrls.slice(0, 100);
+
+  return cappedUrls.map((url, index) => ({
     url,
-    prefix: unique.length > 1 ? `${item.code}_${index + 1}` : item.code,
+    prefix: cappedUrls.length > 1 ? `${safeCode}_${index + 1}` : safeCode,
   }));
 }
 
@@ -70,11 +77,12 @@ export function extensionFor(contentType: string, url: string): string {
 }
 
 function buildFilename(url: string, prefix: string, ext: string): string {
+  const safePrefix = sanitizeDownloadFilename(prefix);
   if (url.startsWith('blob')) {
-    const seg = url.split('/').pop() || prefix;
+    const seg = sanitizeDownloadFilename(url.split('/').pop() || safePrefix);
     return `${seg}.${ext}`;
   }
-  return `${prefix}.${ext}`;
+  return `${safePrefix}.${ext}`;
 }
 
 /** Save a Blob to disk via a transient object URL + anchor click with deferred revocation. */
@@ -87,21 +95,32 @@ export function triggerBlobDownload(blob: Blob, filename: string): void {
   anchor.click();
   document.body.removeChild(anchor);
 
-  // Deferred revocation to ensure browser download starts safely across all engines
+  // Deferred revocation for reliable cross-engine downloading
   setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
 }
 
 /**
- * MAIN-world download queue. Emits the active-task count on every change so the
- * ISOLATED bridge can relay it (via the `ndy_dq` event) to the side panel.
+ * MAIN-world download queue with concurrency limit (max 3) and batch safety.
  */
 export class MediaDownloader {
   private active = 0;
+  private cancelled = false;
 
-  constructor(private readonly onQueueChange?: (count: number) => void) {}
+  constructor(
+    private readonly onQueueChange?: (count: number) => void,
+    private readonly maxConcurrency: number = 3,
+  ) {}
 
   get activeCount(): number {
     return this.active;
+  }
+
+  cancel(): void {
+    this.cancelled = true;
+  }
+
+  resetCancel(): void {
+    this.cancelled = false;
   }
 
   private emit(): void {
@@ -109,7 +128,24 @@ export class MediaDownloader {
   }
 
   /** Fetch a single URL and save it. Resolves true on success. */
-  async download(url: string, prefix: string): Promise<boolean> {
+  async download(url: string, rawPrefix: string): Promise<boolean> {
+    if (this.cancelled) return false;
+
+    // Validate URL security before fetching
+    const valResult = validateMediaDownloadUrl(url);
+    if (!valResult.valid) {
+      console.warn(`[MediaDownloader] Rejected invalid URL: ${valResult.reason}`);
+      return false;
+    }
+
+    const prefix = sanitizeDownloadFilename(rawPrefix);
+
+    // Concurrency control wait
+    while (this.active >= this.maxConcurrency) {
+      if (this.cancelled) return false;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
     this.active += 1;
     this.emit();
     try {
@@ -124,7 +160,8 @@ export class MediaDownloader {
         blob.type && blob.type === contentType ? blob : new Blob([blob], { type: contentType });
       triggerBlobDownload(typed, buildFilename(url, prefix, ext));
       return true;
-    } catch {
+    } catch (err) {
+      console.error('[MediaDownloader] Fetch failed:', err);
       return false;
     } finally {
       this.active = Math.max(0, this.active - 1);
