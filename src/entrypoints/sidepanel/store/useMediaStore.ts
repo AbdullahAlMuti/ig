@@ -24,6 +24,7 @@ import {
 import { buildDownloadEntries } from '../../../shared/utils/mediaDownloader';
 import { exportPostsToExcel } from '../../../shared/utils/excelExporter';
 import type { RankingResult } from '../../../shared/utils/performanceRanker';
+import { sendToInstagramTab } from '../../../shared/utils/tabMessaging';
 
 const WATCHDOG_MS = 2500;
 
@@ -39,23 +40,6 @@ export interface BulkProgress {
 }
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-async function getActiveTabId(): Promise<number | undefined> {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-  return tab?.id;
-}
-
-async function sendToActiveTab(message: RuntimeMessage): Promise<boolean> {
-  const tabId = await getActiveTabId();
-  if (tabId == null) return false;
-  return new Promise((resolve) => {
-    try {
-      chrome.tabs.sendMessage(tabId, message, () => resolve(!chrome.runtime.lastError));
-    } catch {
-      resolve(false);
-    }
-  });
-}
 
 export function useMediaStore() {
   const [posts, setPosts] = useState<InstagramMediaItem[]>([]);
@@ -182,35 +166,39 @@ export function useMediaStore() {
   }, []);
 
   const cleanRefresh = useCallback(async (): Promise<boolean> => {
-    const ok = await sendToActiveTab({ type: RUNTIME_MSG.refresh });
+    const res = await sendToInstagramTab({ type: RUNTIME_MSG.refresh });
     setPosts([]);
     setProgress(null);
     setSelectedCodes(new Set());
     queueRef.current = 0;
     setQueue(0);
     setScrolling(false);
-    return ok;
+    return res.ok;
   }, []);
 
   const scrollTop = useCallback(async () => {
-    const ok = await sendToActiveTab({ type: RUNTIME_MSG.top });
-    if (ok) flashToast('Scrolled to top');
+    const res = await sendToInstagramTab({ type: RUNTIME_MSG.top });
+    if (res.ok) {
+      flashToast('Scrolled to top');
+    } else {
+      flashToast(res.error || 'Failed to scroll to top');
+    }
   }, [flashToast]);
 
   const startAutoScroll = useCallback(async () => {
     if (scrolling) return;
     setScrolling(true);
-    const ok = await sendToActiveTab({ type: RUNTIME_MSG.swipe, count: 500 });
-    if (!ok) {
+    const res = await sendToInstagramTab({ type: RUNTIME_MSG.swipe, count: 500 });
+    if (!res.ok) {
       setScrolling(false);
-      flashToast('Instagram tab is no longer available.');
+      flashToast(res.error || 'Instagram tab is unavailable.');
     } else {
       flashToast('Auto-scroll started');
     }
   }, [scrolling, flashToast]);
 
   const stopScrolling = useCallback(async () => {
-    await sendToActiveTab({ type: RUNTIME_MSG.stopScroll });
+    await sendToInstagramTab({ type: RUNTIME_MSG.stopScroll });
     setScrolling(false);
     flashToast('Auto-scroll stopped');
   }, [flashToast]);
@@ -268,15 +256,19 @@ export function useMediaStore() {
             p.statusLabel = 'Downloading...';
             p.currentFileLabel = entry.prefix;
             setProgress({ ...p });
-            const ok = await sendToActiveTab({
+
+            const res = await sendToInstagramTab({
               type: RUNTIME_MSG.contentDown,
               url: entry.url,
               prefix: entry.prefix,
             });
-            if (ok) {
+
+            if (res.ok) {
               await waitForQueueRise();
               await waitForQueueDrain();
               p.completedFiles += 1;
+            } else {
+              flashToast(`Download failed for ${entry.prefix}: ${res.error || 'Unknown error'}`);
             }
             setProgress({ ...p });
           }

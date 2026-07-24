@@ -5,6 +5,7 @@ import type { ItemPerformanceData } from '../../../shared/utils/performanceRanke
 import { BADGE_METADATA, type BadgeType } from '../../../shared/utils/performanceRanker';
 import { formatCompact, formatDate } from '../../../shared/utils/format';
 import { buildDownloadEntries } from '../../../shared/utils/mediaDownloader';
+import { sendToInstagramTab } from '../../../shared/utils/tabMessaging';
 import type { MediaStoreApi } from '../store/useMediaStore';
 
 interface MediaDetailsModalProps {
@@ -50,23 +51,22 @@ export function MediaDetailsModal({ item, rankData, store, onClose }: MediaDetai
       store.flashToast('No downloadable media found');
       return;
     }
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) {
-      store.flashToast('Instagram tab is no longer available');
-      return;
-    }
+    let successCount = 0;
     for (const entry of entries) {
-      chrome.tabs.sendMessage(
-        tab.id,
-        {
-          type: 'ndy_content_down',
-          url: entry.url,
-          prefix: entry.prefix,
-        },
-        () => void chrome.runtime.lastError,
-      );
+      const res = await sendToInstagramTab({
+        type: 'ndy_content_down',
+        url: entry.url,
+        prefix: entry.prefix,
+      });
+      if (res.ok) {
+        successCount++;
+      } else {
+        store.flashToast(res.error || 'Failed to trigger download');
+      }
     }
-    store.flashToast('Download started');
+    if (successCount > 0) {
+      store.flashToast(`Download started (${successCount} files)`);
+    }
   };
 
   return (
