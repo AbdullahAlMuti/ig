@@ -50,6 +50,82 @@ export const DEFAULT_PERFORMANCE_FILTERS: Readonly<PerformanceFilterState> = Obj
   top10PercentOnly: false,
 });
 
+function sanitizeNumber(val: unknown): number | null {
+  if (val == null || typeof val !== 'number' || !Number.isFinite(val) || Number.isNaN(val)) {
+    return null;
+  }
+  return val;
+}
+
+/** Centralized filter state normalization & sanitization */
+export function normalizePerformanceFilters(input: unknown): PerformanceFilterState {
+  if (!input || typeof input !== 'object') {
+    return { ...DEFAULT_PERFORMANCE_FILTERS };
+  }
+
+  const raw = input as Partial<PerformanceFilterState>;
+
+  // 1. Badges array deduplication & filtering
+  const badges: BadgeFilterValue[] = Array.isArray(raw.badges)
+    ? Array.from(new Set(raw.badges.filter((b) => typeof b === 'string') as BadgeFilterValue[]))
+    : [];
+
+  // 2. Score range (0-100)
+  let minScore = sanitizeNumber(raw.minScore);
+  let maxScore = sanitizeNumber(raw.maxScore);
+
+  if (minScore != null) minScore = Math.max(0, Math.min(100, minScore));
+  if (maxScore != null) maxScore = Math.max(0, Math.min(100, maxScore));
+
+  if (minScore != null && maxScore != null && minScore > maxScore) {
+    const temp = minScore;
+    minScore = maxScore;
+    maxScore = temp;
+  }
+
+  // 3. Overall Rank Top N
+  let maxOverallRank = sanitizeNumber(raw.maxOverallRank);
+  if (maxOverallRank != null) {
+    maxOverallRank = Math.max(1, Math.floor(maxOverallRank));
+  }
+
+  // 4. ER range %
+  let minER = sanitizeNumber(raw.minER);
+  let maxER = sanitizeNumber(raw.maxER);
+
+  if (minER != null) minER = Math.max(0, minER);
+  if (maxER != null) maxER = Math.max(0, maxER);
+
+  if (minER != null && maxER != null && minER > maxER) {
+    const temp = minER;
+    minER = maxER;
+    maxER = temp;
+  }
+
+  // 5. Toggles & contradictory state resolution
+  let hasBadgeOnly = Boolean(raw.hasBadgeOnly);
+  let noBadgeOnly = Boolean(raw.noBadgeOnly);
+
+  if (hasBadgeOnly && noBadgeOnly) {
+    hasBadgeOnly = false;
+    noBadgeOnly = false;
+  }
+
+  const top10PercentOnly = Boolean(raw.top10PercentOnly);
+
+  return {
+    badges,
+    minScore,
+    maxScore,
+    maxOverallRank,
+    minER,
+    maxER,
+    hasBadgeOnly,
+    noBadgeOnly,
+    top10PercentOnly,
+  };
+}
+
 export interface DateFilterResult {
   items: InstagramMediaItem[];
   hadMissingDate: boolean;
@@ -133,8 +209,9 @@ export function isPerformanceFilterActive(filters: PerformanceFilterState): bool
 export function matchesPerformanceFilter(
   item: InstagramMediaItem,
   rankings: RankingResult,
-  filters: PerformanceFilterState,
+  rawFilters: PerformanceFilterState,
 ): boolean {
+  const filters = normalizePerformanceFilters(rawFilters);
   if (!isPerformanceFilterActive(filters)) return true;
 
   const rankInfo = rankings.byCode.get(item.code);
@@ -180,6 +257,8 @@ export function filterAndSort(
   allMedia: InstagramMediaItem[],
   { days, sortKey, performanceFilters = DEFAULT_PERFORMANCE_FILTERS }: FilterSortOptions,
 ): FilterSortOutput {
+  const normPerfFilters = normalizePerformanceFilters(performanceFilters);
+
   // Step 1: Base dataset filter (Date range)
   const dateFiltered = filterByDateRange(allMedia, days);
   const baseItems = dateFiltered.items;
@@ -206,13 +285,13 @@ export function filterAndSort(
     categoryCounts[badgeKey] = (categoryCounts[badgeKey] || 0) + 1;
   });
 
-  const activePerf = isPerformanceFilterActive(performanceFilters);
+  const activePerf = isPerformanceFilterActive(normPerfFilters);
 
   // Step 3: Performance Badge & Advanced Filtering
   let perfFiltered: InstagramMediaItem[] = baseItems;
   if (activePerf) {
     perfFiltered = baseItems.filter((item) =>
-      matchesPerformanceFilter(item, rankings, performanceFilters),
+      matchesPerformanceFilter(item, rankings, normPerfFilters),
     );
   }
 

@@ -26,7 +26,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'top-performer',
     label: 'Top Performer',
     shortLabel: 'Top',
-    description: 'Highest overall performance among the currently visible posts.',
+    description: 'Highest overall performance in the selected date-range comparison set.',
     bgClass: 'bg-amber-500/90',
     borderClass: 'border-amber-400/40',
     textClass: 'text-amber-950',
@@ -36,7 +36,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'most-engaged',
     label: 'Most Engaged',
     shortLabel: 'Engaged',
-    description: 'Highest engagement rate among the currently visible posts.',
+    description: 'Highest engagement rate in the selected date-range comparison set.',
     bgClass: 'bg-purple-600/90',
     borderClass: 'border-purple-400/40',
     textClass: 'text-purple-100',
@@ -46,7 +46,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'most-liked',
     label: 'Most Liked',
     shortLabel: 'Liked',
-    description: 'Highest number of likes among the currently visible posts.',
+    description: 'Highest number of likes in the selected date-range comparison set.',
     bgClass: 'bg-rose-500/90',
     borderClass: 'border-rose-400/40',
     textClass: 'text-white',
@@ -56,7 +56,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'most-viewed',
     label: 'Most Viewed',
     shortLabel: 'Viewed',
-    description: 'Highest number of views among the currently visible posts.',
+    description: 'Highest number of views in the selected date-range comparison set.',
     bgClass: 'bg-blue-600/90',
     borderClass: 'border-blue-400/40',
     textClass: 'text-white',
@@ -66,7 +66,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'best-reach',
     label: 'Best Reach',
     shortLabel: 'Reach',
-    description: 'Reached one of the largest audiences in the current selection.',
+    description: 'Reached one of the largest audiences in the selected date-range comparison set.',
     bgClass: 'bg-teal-600/90',
     borderClass: 'border-teal-400/40',
     textClass: 'text-white',
@@ -76,7 +76,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'trending',
     label: 'Trending',
     shortLabel: 'Trending',
-    description: 'Growing faster than comparable recent posts.',
+    description: 'Growing faster than comparable recent posts in the comparison set.',
     bgClass: 'bg-orange-500/90',
     borderClass: 'border-orange-400/40',
     textClass: 'text-white',
@@ -86,7 +86,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'rising-post',
     label: 'Rising Post',
     shortLabel: 'Rising',
-    description: 'Showing strong early engagement after publishing.',
+    description: 'High early growth trajectory published within 72 hours.',
     bgClass: 'bg-emerald-600/90',
     borderClass: 'border-emerald-400/40',
     textClass: 'text-white',
@@ -96,7 +96,7 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
     type: 'high-performer',
     label: 'High Performer',
     shortLabel: 'High',
-    description: 'Ranks within the top-performing group of the current selection.',
+    description: 'Top 15% overall performance score in the selected comparison set.',
     bgClass: 'bg-indigo-600/90',
     borderClass: 'border-indigo-400/40',
     textClass: 'text-white',
@@ -106,385 +106,261 @@ export const BADGE_METADATA: Record<BadgeType, PerformanceBadgeInfo> = {
 
 export interface ItemPerformanceData {
   code: string;
-  badge?: PerformanceBadgeInfo;
-  overallRank: number;
-  overallScore: number;
+  overallScore: number; // 0..100
+  overallRank: number; // 1..N
+  erRank: number;
   likesRank: number;
   commentsRank: number;
   viewsRank: number;
-  erRank: number;
-  trendingRank: number;
-  reachRank: number;
+  badge: PerformanceBadgeInfo | null;
   engagementRatePercent: number;
-  secondaryBadges: BadgeType[];
+  achievements: string[];
 }
 
 export interface RankingResult {
-  byCode: Map<string, ItemPerformanceData>;
   totalCount: number;
+  byCode: Map<string, ItemPerformanceData>;
 }
 
-interface IntermediateMetrics {
-  item: InstagramMediaItem;
-  code: string;
-  likes: number;
-  comments: number;
-  reposts: number;
-  views: number;
-  er: number;
-  ageHours: number;
-  totalInteractions: number;
-  engagementVelocity: number;
-  viewVelocity: number;
-  // Normalized metrics
-  normLikes: number;
-  normComments: number;
-  normViews: number;
-  normER: number;
-  normVelocity: number;
-  normViewVelocity: number;
-  normRecency: number;
-  // Final calculated scores
-  overallScoreRaw: number;
-  overallScore: number;
-  trendingScore: number;
-  reachScore: number;
-  // Ranks
-  overallRank: number;
-  likesRank: number;
-  commentsRank: number;
-  viewsRank: number;
-  erRank: number;
-  trendingRank: number;
-  reachRank: number;
+function safeLog10(val: number | undefined | null): number {
+  if (val == null || !Number.isFinite(val) || val <= 0) return 0;
+  return Math.log10(val + 1);
 }
 
-/**
- * Calculates multi-metric performance rankings for the given media items.
- * Uses logarithmic scaling, min-max normalization, missing metric redistribution,
- * and priority-based conflict resolution.
- */
-export function calculatePerformanceRankings(
-  items: InstagramMediaItem[],
-  nowSec: number = Math.floor(Date.now() / 1000),
-): RankingResult {
+function minMaxNormalize(val: number, min: number, max: number): number {
+  if (max === min) return 1.0;
+  return Math.max(0, Math.min(1.0, (val - min) / (max - min)));
+}
+
+export function calculatePerformanceRankings(items: InstagramMediaItem[]): RankingResult {
   const result: RankingResult = {
-    byCode: new Map(),
     totalCount: items.length,
+    byCode: new Map(),
   };
 
-  if (!Array.isArray(items) || items.length === 0) {
-    return result;
-  }
+  if (!items || items.length === 0) return result;
 
-  // 1. Build initial metrics per item
-  const rawList: IntermediateMetrics[] = items.map((item) => {
-    const likes = Math.max(0, item.likeCount ?? 0);
-    const comments = Math.max(0, item.commentCount ?? 0);
-    const reposts = Math.max(0, item.mediaRepostCount ?? 0);
-    const views = Math.max(0, item.playCount ?? 0);
-    const er = Math.max(0, item.engagementRate ?? 0);
-    const ageHours = item.createdAt ? Math.max(1, (nowSec - item.createdAt) / 3600) : 720;
-    const totalInteractions = likes + comments * 4 + reposts * 4;
-    const engagementVelocity = totalInteractions / Math.max(1, ageHours);
-    const viewVelocity = views / Math.max(1, ageHours);
+  const validItems = items.filter((i) => Boolean(i && i.code));
+  if (validItems.length === 0) return result;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Collect logarithmic raw metrics
+  const logERs = validItems.map((i) => safeLog10(i.engagementRate != null ? i.engagementRate * 100 : 0));
+  const logLikes = validItems.map((i) => safeLog10(i.likeCount));
+  const logComments = validItems.map((i) => safeLog10(i.commentCount));
+  const logViews = validItems.map((i) => safeLog10(i.playCount));
+
+  // Determine min/max for normalization
+  const minER = Math.min(...logERs);
+  const maxER = Math.max(...logERs);
+
+  const minLikes = Math.min(...logLikes);
+  const maxLikes = Math.max(...logLikes);
+
+  const minComments = Math.min(...logComments);
+  const maxComments = Math.max(...logComments);
+
+  const minViews = Math.min(...logViews);
+  const maxViews = Math.max(...logViews);
+
+  const hasViewData = validItems.some((i) => i.playCount != null && i.playCount > 0);
+
+  // Compute individual normalized composite scores
+  const intermediate = validItems.map((item, idx) => {
+    const normER = minMaxNormalize(logERs[idx], minER, maxER);
+    const normLikes = minMaxNormalize(logLikes[idx], minLikes, maxLikes);
+    const normComments = minMaxNormalize(logComments[idx], minComments, maxComments);
+    const normViews = hasViewData ? minMaxNormalize(logViews[idx], minViews, maxViews) : 0;
+
+    // Recency & Velocity calculations
+    const ageHours = item.createdAt != null ? Math.max(0.5, (nowSec - item.createdAt) / 3600) : 168;
+    const recencyFactor = Math.max(0, 1 - ageHours / 336); // 14-day window
+
+    const totalEng = (item.likeCount ?? 0) + (item.commentCount ?? 0) * 2;
+    const velocity = totalEng / Math.pow(ageHours + 2, 1.2);
+    const logVelocity = safeLog10(velocity);
+
+    // Weights redistribution if view data is completely missing
+    let wER = 0.35;
+    let wLikes = 0.20;
+    let wComments = 0.15;
+    let wViews = 0.15;
+    let wRecency = 0.08;
+    let wVelocity = 0.07;
+
+    if (!hasViewData) {
+      wViews = 0;
+      wLikes += 0.08;
+      wComments += 0.07;
+    }
+
+    const rawComposite =
+      normER * wER +
+      normLikes * wLikes +
+      normComments * wComments +
+      normViews * wViews +
+      recencyFactor * wRecency +
+      logVelocity * wVelocity;
+
+    const overallScore = Math.round(Math.max(0, Math.min(100, rawComposite * 100)));
 
     return {
       item,
-      code: item.code,
-      likes,
-      comments,
-      reposts,
-      views,
-      er,
+      overallScore,
+      erVal: item.engagementRate ?? 0,
+      likesVal: item.likeCount ?? 0,
+      commentsVal: item.commentCount ?? 0,
+      viewsVal: item.playCount ?? 0,
       ageHours,
-      totalInteractions,
-      engagementVelocity,
-      viewVelocity,
-      normLikes: 0,
-      normComments: 0,
-      normViews: 0,
-      normER: 0,
-      normVelocity: 0,
-      normViewVelocity: 0,
-      normRecency: 0,
-      overallScoreRaw: 0,
-      overallScore: 0,
-      trendingScore: 0,
-      reachScore: 0,
-      overallRank: 0,
-      likesRank: 0,
-      commentsRank: 0,
-      viewsRank: 0,
-      erRank: 0,
-      trendingRank: 0,
-      reachRank: 0,
+      logVelocity,
     };
   });
 
-  // 2. Compute min & max bounds with logarithmic scaling
-  let minLogLikes = Infinity, maxLogLikes = -Infinity;
-  let minLogComments = Infinity, maxLogComments = -Infinity;
-  let minLogViews = Infinity, maxLogViews = -Infinity;
-  let minER = Infinity, maxER = -Infinity;
-  let minLogVel = Infinity, maxLogVel = -Infinity;
-  let minLogViewVel = Infinity, maxLogViewVel = -Infinity;
-  let minAge = Infinity, maxAge = -Infinity;
-
-  rawList.forEach((m) => {
-    const logL = Math.log10(m.likes + 1);
-    const logC = Math.log10(m.comments + 1);
-    const logV = Math.log10(m.views + 1);
-    const logVel = Math.log10(m.engagementVelocity + 1);
-    const logVVel = Math.log10(m.viewVelocity + 1);
-
-    if (logL < minLogLikes) minLogLikes = logL;
-    if (logL > maxLogLikes) maxLogLikes = logL;
-    if (logC < minLogComments) minLogComments = logC;
-    if (logC > maxLogComments) maxLogComments = logC;
-    if (logV < minLogViews) minLogViews = logV;
-    if (logV > maxLogViews) maxLogViews = logV;
-    if (m.er < minER) minER = m.er;
-    if (m.er > maxER) maxER = m.er;
-    if (logVel < minLogVel) minLogVel = logVel;
-    if (logVel > maxLogVel) maxLogVel = logVel;
-    if (logVVel < minLogViewVel) minLogViewVel = logVVel;
-    if (logVVel > maxLogViewVel) maxLogViewVel = logVVel;
-    if (m.ageHours < minAge) minAge = m.ageHours;
-    if (m.ageHours > maxAge) maxAge = m.ageHours;
+  // Calculate individual dimension ranks with deterministic tie breaks
+  const rankByOverall = [...intermediate].sort((a, b) => {
+    if (b.overallScore !== a.overallScore) return b.overallScore - a.overallScore;
+    return a.item.code.localeCompare(b.item.code);
   });
 
-  // Helper scale function
-  const scale = (val: number, min: number, max: number) =>
-    max > min ? (val - min) / (max - min) : 0.5;
-
-  const hasViewsData = maxLogViews > 0;
-  const hasCommentsData = maxLogComments > 0;
-
-  // Weight adjustments if metrics are missing across entire dataset
-  let wER = 0.35;
-  let wLikes = 0.20;
-  let wComments = 0.15;
-  let wViews = 0.15;
-  let wRecency = 0.08;
-  let wVelocity = 0.07;
-
-  if (!hasViewsData) {
-    wLikes += 0.08;
-    wComments += 0.07;
-    wViews = 0;
-  }
-  if (!hasCommentsData) {
-    wLikes += 0.15;
-    wComments = 0;
-  }
-
-  // 3. Normalize & calculate scores
-  rawList.forEach((m) => {
-    const logL = Math.log10(m.likes + 1);
-    const logC = Math.log10(m.comments + 1);
-    const logV = Math.log10(m.views + 1);
-    const logVel = Math.log10(m.engagementVelocity + 1);
-    const logVVel = Math.log10(m.viewVelocity + 1);
-
-    m.normLikes = scale(logL, minLogLikes, maxLogLikes);
-    m.normComments = scale(logC, minLogComments, maxLogComments);
-    m.normViews = scale(logV, minLogViews, maxLogViews);
-    m.normER = scale(m.er, minER, maxER);
-    m.normVelocity = scale(logVel, minLogVel, maxLogVel);
-    m.normViewVelocity = scale(logVVel, minLogViewVel, maxLogViewVel);
-    m.normRecency = 1 - scale(m.ageHours, minAge, maxAge);
-
-    m.overallScoreRaw =
-      m.normER * wER +
-      m.normLikes * wLikes +
-      m.normComments * wComments +
-      m.normViews * wViews +
-      m.normRecency * wRecency +
-      m.normVelocity * wVelocity;
-
-    m.overallScore = Math.round(m.overallScoreRaw * 100);
-    m.trendingScore = m.normVelocity * 0.60 + m.normViewVelocity * 0.25 + m.normER * 0.15;
-    m.reachScore = m.normViews * 0.75 + m.normViewVelocity * 0.25;
+  const rankByER = [...intermediate].sort((a, b) => {
+    if (b.erVal !== a.erVal) return b.erVal - a.erVal;
+    return a.item.code.localeCompare(b.item.code);
   });
 
-  // 4. Generate 1-based ranks for each metric
-  const rankBy = (key: keyof IntermediateMetrics, asc = false) => {
-    const sorted = [...rawList].sort((a, b) => {
-      const va = Number(a[key]);
-      const vb = Number(b[key]);
-      return asc ? va - vb : vb - va;
-    });
-    return sorted;
-  };
+  const rankByLikes = [...intermediate].sort((a, b) => {
+    if (b.likesVal !== a.likesVal) return b.likesVal - a.likesVal;
+    return a.item.code.localeCompare(b.item.code);
+  });
 
-  const byOverall = rankBy('overallScoreRaw');
-  byOverall.forEach((m, idx) => (m.overallRank = idx + 1));
+  const rankByComments = [...intermediate].sort((a, b) => {
+    if (b.commentsVal !== a.commentsVal) return b.commentsVal - a.commentsVal;
+    return a.item.code.localeCompare(b.item.code);
+  });
 
-  const byLikes = rankBy('likes');
-  byLikes.forEach((m, idx) => (m.likesRank = idx + 1));
+  const rankByViews = [...intermediate].sort((a, b) => {
+    if (b.viewsVal !== a.viewsVal) return b.viewsVal - a.viewsVal;
+    return a.item.code.localeCompare(b.item.code);
+  });
 
-  const byComments = rankBy('comments');
-  byComments.forEach((m, idx) => (m.commentsRank = idx + 1));
+  const overallRankMap = new Map<string, number>();
+  rankByOverall.forEach((obj, idx) => overallRankMap.set(obj.item.code, idx + 1));
 
-  const byViews = rankBy('views');
-  byViews.forEach((m, idx) => (m.viewsRank = idx + 1));
+  const erRankMap = new Map<string, number>();
+  rankByER.forEach((obj, idx) => erRankMap.set(obj.item.code, idx + 1));
 
-  const byER = rankBy('er');
-  byER.forEach((m, idx) => (m.erRank = idx + 1));
+  const likesRankMap = new Map<string, number>();
+  rankByLikes.forEach((obj, idx) => likesRankMap.set(obj.item.code, idx + 1));
 
-  const byTrending = rankBy('trendingScore');
-  byTrending.forEach((m, idx) => (m.trendingRank = idx + 1));
+  const commentsRankMap = new Map<string, number>();
+  rankByComments.forEach((obj, idx) => commentsRankMap.set(obj.item.code, idx + 1));
 
-  const byReach = rankBy('reachScore');
-  byReach.forEach((m, idx) => (m.reachRank = idx + 1));
+  const viewsRankMap = new Map<string, number>();
+  rankByViews.forEach((obj, idx) => viewsRankMap.set(obj.item.code, idx + 1));
 
-  // Map for easy lookup
-  const metricMap = new Map<string, IntermediateMetrics>();
-  rawList.forEach((m) => metricMap.set(m.code, m));
+  // Velocity ranking
+  const rankByVelocity = [...intermediate].sort((a, b) => b.logVelocity - a.logVelocity);
+  const velocityRankMap = new Map<string, number>();
+  rankByVelocity.forEach((obj, idx) => velocityRankMap.set(obj.item.code, idx + 1));
 
-  // 5. Selective Badge Assignment Pipeline
-  const assignedBadge = new Map<string, BadgeType>();
-  const secondaryMap = new Map<string, BadgeType[]>();
+  const count = validItems.length;
 
-  const addSecondary = (code: string, b: BadgeType) => {
-    const list = secondaryMap.get(code) ?? [];
-    if (!list.includes(b)) {
-      list.push(b);
-      secondaryMap.set(code, list);
-    }
-  };
+  // Selective badge assignment rules
+  const assignedBadges = new Map<string, BadgeType>();
 
-  const total = rawList.length;
-
-  // Selective rule thresholds based on dataset size:
-  // 1-4 items: Only Top Performer
-  // 5-7 items: Top Performer, Most Engaged, Most Liked
-  // 8+ items: Full badge system
-
-  // Category 1: Top Performer (#1 Overall)
-  if (byOverall.length > 0) {
-    const topItem = byOverall[0];
-    assignedBadge.set(topItem.code, 'top-performer');
-    addSecondary(topItem.code, 'top-performer');
+  if (count >= 1) {
+    const topCode = rankByOverall[0].item.code;
+    assignedBadges.set(topCode, 'top-performer');
   }
 
-  // Category 2: Most Engaged (#1 ER)
-  if (total >= 5 && byER.length > 0) {
-    let candidate = byER.find((m) => !assignedBadge.has(m.code));
-    if (!candidate && byER.length > 0) {
-      candidate = byER[0]; // If #1 ER is also #1 Overall
+  if (count >= 5) {
+    const bestErObj = rankByER.find((o) => !assignedBadges.has(o.item.code));
+    if (bestErObj && bestErObj.erVal > 0) {
+      assignedBadges.set(bestErObj.item.code, 'most-engaged');
     }
-    if (candidate && candidate.er > 0) {
-      if (!assignedBadge.has(candidate.code)) {
-        assignedBadge.set(candidate.code, 'most-engaged');
+
+    const bestLikesObj = rankByLikes.find((o) => !assignedBadges.has(o.item.code));
+    if (bestLikesObj && bestLikesObj.likesVal > 0) {
+      assignedBadges.set(bestLikesObj.item.code, 'most-liked');
+    }
+  }
+
+  if (count >= 8) {
+    if (hasViewData) {
+      const bestViewsObj = rankByViews.find((o) => !assignedBadges.has(o.item.code));
+      if (bestViewsObj && bestViewsObj.viewsVal > 0) {
+        assignedBadges.set(bestViewsObj.item.code, 'most-viewed');
       }
-      addSecondary(candidate.code, 'most-engaged');
-    }
-  }
 
-  // Category 3: Most Liked (#1 Likes)
-  if (total >= 5 && byLikes.length > 0) {
-    let candidate = byLikes.find((m) => !assignedBadge.has(m.code));
-    if (!candidate && byLikes.length > 0) {
-      candidate = byLikes[0];
-    }
-    if (candidate && candidate.likes > 0) {
-      if (!assignedBadge.has(candidate.code)) {
-        assignedBadge.set(candidate.code, 'most-liked');
+      const bestReachObj = rankByViews.find(
+        (o) =>
+          !assignedBadges.has(o.item.code) &&
+          (viewsRankMap.get(o.item.code) ?? 99) <= Math.max(2, Math.ceil(count * 0.15)),
+      );
+      if (bestReachObj) {
+        assignedBadges.set(bestReachObj.item.code, 'best-reach');
       }
-      addSecondary(candidate.code, 'most-liked');
     }
-  }
 
-  // Category 4: Most Viewed (#1 Views)
-  if (total >= 8 && byViews.length > 0) {
-    let candidate = byViews.find((m) => !assignedBadge.has(m.code));
-    if (!candidate && byViews.length > 0) {
-      candidate = byViews[0];
-    }
-    if (candidate && candidate.views > 0) {
-      if (!assignedBadge.has(candidate.code)) {
-        assignedBadge.set(candidate.code, 'most-viewed');
-      }
-      addSecondary(candidate.code, 'most-viewed');
-    }
-  }
-
-  // Category 5: Trending (Published < 14d, top 15% velocity, totalInteractions >= 5)
-  if (total >= 8) {
-    const trendingCandidates = byTrending.filter(
-      (m) => m.ageHours <= 336 && m.totalInteractions >= 5 && m.trendingRank <= Math.max(1, Math.ceil(total * 0.15)),
+    const trendingCandidate = rankByVelocity.find(
+      (o) =>
+        !assignedBadges.has(o.item.code) &&
+        o.ageHours <= 336 &&
+        (velocityRankMap.get(o.item.code) ?? 99) <= Math.max(2, Math.ceil(count * 0.15)),
     );
-    for (const cand of trendingCandidates) {
-      addSecondary(cand.code, 'trending');
-      if (!assignedBadge.has(cand.code)) {
-        assignedBadge.set(cand.code, 'trending');
-        break; // Only assign main badge to top trending
-      }
+    if (trendingCandidate) {
+      assignedBadges.set(trendingCandidate.item.code, 'trending');
     }
-  }
 
-  // Category 6: Best Reach (Top 15% reach score, views > 0)
-  if (total >= 8 && hasViewsData) {
-    const reachCandidates = byReach.filter(
-      (m) => m.views > 0 && m.reachRank <= Math.max(1, Math.ceil(total * 0.15)),
+    const risingCandidate = rankByVelocity.find(
+      (o) =>
+        !assignedBadges.has(o.item.code) &&
+        o.ageHours <= 72 &&
+        (velocityRankMap.get(o.item.code) ?? 99) <= Math.max(2, Math.ceil(count * 0.25)),
     );
-    for (const cand of reachCandidates) {
-      addSecondary(cand.code, 'best-reach');
-      if (!assignedBadge.has(cand.code)) {
-        assignedBadge.set(cand.code, 'best-reach');
-        break;
+    if (risingCandidate) {
+      assignedBadges.set(risingCandidate.item.code, 'rising-post');
+    }
+
+    const top15Cutoff = Math.max(1, Math.ceil(count * 0.15));
+    for (const obj of rankByOverall) {
+      const rank = overallRankMap.get(obj.item.code) ?? 99;
+      if (rank <= top15Cutoff && !assignedBadges.has(obj.item.code)) {
+        assignedBadges.set(obj.item.code, 'high-performer');
       }
     }
   }
 
-  // Category 7: Rising Post (Published < 72h, top 25% velocity, totalInteractions >= 3)
-  if (total >= 8) {
-    const risingCandidates = byTrending.filter(
-      (m) => m.ageHours <= 72 && m.totalInteractions >= 3 && m.trendingRank <= Math.max(1, Math.ceil(total * 0.25)),
-    );
-    for (const cand of risingCandidates) {
-      addSecondary(cand.code, 'rising-post');
-      if (!assignedBadge.has(cand.code)) {
-        assignedBadge.set(cand.code, 'rising-post');
-        break;
-      }
-    }
-  }
+  // Construct item performance records
+  intermediate.forEach((obj) => {
+    const code = obj.item.code;
+    const badgeKey = assignedBadges.get(code);
+    const badge = badgeKey ? BADGE_METADATA[badgeKey] : null;
 
-  // Category 8: High Performer (Top 15% overall score, dataset >= 8)
-  if (total >= 8) {
-    const cutoffRank = Math.max(2, Math.ceil(total * 0.15));
-    byOverall.forEach((m) => {
-      if (m.overallRank <= cutoffRank) {
-        addSecondary(m.code, 'high-performer');
-        if (!assignedBadge.has(m.code)) {
-          assignedBadge.set(m.code, 'high-performer');
-        }
-      }
-    });
-  }
+    const oRank = overallRankMap.get(code) ?? 0;
+    const eRank = erRankMap.get(code) ?? 0;
+    const lRank = likesRankMap.get(code) ?? 0;
+    const cRank = commentsRankMap.get(code) ?? 0;
+    const vRank = viewsRankMap.get(code) ?? 0;
 
-  // 6. Build final ItemPerformanceData objects
-  rawList.forEach((m) => {
-    const mainBadgeType = assignedBadge.get(m.code);
-    const badge = mainBadgeType ? BADGE_METADATA[mainBadgeType] : undefined;
-    const secondary = secondaryMap.get(m.code) ?? [];
+    const achievements: string[] = [];
+    if (oRank === 1) achievements.push('👑 #1 Overall Performance');
+    if (eRank === 1) achievements.push('⚡ #1 Highest Engagement Rate');
+    if (lRank === 1) achievements.push('❤️ #1 Most Liked');
+    if (cRank === 1) achievements.push('💬 #1 Most Commented');
+    if (vRank === 1 && hasViewData) achievements.push('👁️ #1 Most Viewed');
 
-    result.byCode.set(m.code, {
-      code: m.code,
+    result.byCode.set(code, {
+      code,
+      overallScore: obj.overallScore,
+      overallRank: oRank,
+      erRank: eRank,
+      likesRank: lRank,
+      commentsRank: cRank,
+      viewsRank: vRank,
       badge,
-      overallRank: m.overallRank,
-      overallScore: m.overallScore,
-      likesRank: m.likesRank,
-      commentsRank: m.commentsRank,
-      viewsRank: m.viewsRank,
-      erRank: m.erRank,
-      trendingRank: m.trendingRank,
-      reachRank: m.reachRank,
-      engagementRatePercent: Number((m.er * 100).toFixed(2)),
-      secondaryBadges: secondary,
+      engagementRatePercent: Number((obj.erVal * 100).toFixed(2)),
+      achievements,
     });
   });
 
