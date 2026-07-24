@@ -98,28 +98,26 @@ export function PerformanceFilterPopover({
   };
 
   return (
-    <div ref={popoverRef} className="relative inline-block text-left w-full">
+    <div ref={popoverRef} className="relative inline-block text-left shrink-0">
       {/* Trigger Button */}
       <button
         onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-label="Filter media by performance metrics"
-        className={`flex h-8 w-full items-center justify-between gap-1.5 rounded-md border px-2 text-[11px] font-medium transition-all active:scale-95 ${
+        className={`flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[11px] font-medium transition-all active:scale-95 ${
           isActive
             ? 'border-[#6558E8] bg-[#6558E8]/10 text-[#6558E8] font-semibold'
             : 'border-[#E6E8EC] bg-white text-[#171A21] hover:border-[#D1D5DB] hover:bg-[#F4F5F7]'
         }`}
       >
-        <div className="flex items-center gap-1 min-w-0 truncate">
-          <Sparkles className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-[#6558E8]' : 'text-[#667085]'}`} />
-          <span className="truncate">{triggerLabel}</span>
-        </div>
-        <ChevronDown className="h-3 w-3 shrink-0 text-[#667085]" />
+        <Sparkles className={`h-3.5 w-3.5 ${isActive ? 'text-[#6558E8]' : 'text-[#667085]'}`} />
+        <span className="truncate max-w-[110px]">{triggerLabel}</span>
+        <ChevronDown className="h-3 w-3 text-[#667085]" />
       </button>
 
       {/* Popover Card Modal */}
       {open && (
-        <div className="absolute left-3.5 right-3.5 top-[46px] z-50 rounded-lg border border-[#E6E8EC] bg-white p-3 shadow-xl text-[#171A21] animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-0 top-9 z-50 w-[280px] rounded-lg border border-[#E6E8EC] bg-white p-3 shadow-xl text-[#171A21] animate-in fade-in zoom-in-95 duration-100">
           <div className="flex items-center justify-between border-b border-[#E6E8EC] pb-2">
             <span className="text-[12px] font-semibold">Filter by Performance</span>
             <button
