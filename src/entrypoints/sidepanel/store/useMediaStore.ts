@@ -84,7 +84,7 @@ export function useMediaStore() {
   /* ---- inbound message wiring ---- */
   useEffect(() => {
     const onMessage = (message: RuntimeMessage) => {
-      if (message?.type === RUNTIME_MSG.sideShop) {
+      if (message?.type === RUNTIME_MSG.sideShop || message?.type === RUNTIME_MSG.bgIg) {
         setConnected(true);
         setPosts(Array.isArray(message.info) ? message.info : []);
         if (watchdogRef.current) clearTimeout(watchdogRef.current);

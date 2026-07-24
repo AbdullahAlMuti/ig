@@ -69,8 +69,8 @@ export function validateSnapshotRootPayload(info: unknown): ValidatedMessageResu
     return { valid: true }; // null / empty snapshot is acceptable
   }
 
-  if (!isObject(info)) {
-    return { valid: false, error: 'Snapshot root must be an object.' };
+  if (!Array.isArray(info) && !isObject(info)) {
+    return { valid: false, error: 'Snapshot root must be an array or object.' };
   }
 
   // Reject oversized snapshot objects
