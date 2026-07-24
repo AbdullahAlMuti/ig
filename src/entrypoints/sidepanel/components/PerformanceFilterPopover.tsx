@@ -119,7 +119,7 @@ export function PerformanceFilterPopover({
 
       {/* Popover Card Modal */}
       {open && (
-        <div className="absolute left-0 top-9 z-50 w-[280px] rounded-lg border border-[#E6E8EC] bg-white p-3 shadow-xl text-[#171A21] animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute left-3.5 right-3.5 top-[46px] z-50 rounded-lg border border-[#E6E8EC] bg-white p-3 shadow-xl text-[#171A21] animate-in fade-in zoom-in-95 duration-100">
           <div className="flex items-center justify-between border-b border-[#E6E8EC] pb-2">
             <span className="text-[12px] font-semibold">Filter by Performance</span>
             <button

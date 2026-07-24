@@ -26,7 +26,7 @@ export function SortAndScrollToolbar({ store }: { store: MediaStoreApi }) {
   const disabled = !connected;
 
   return (
-    <div className="flex flex-col gap-2 border-b border-[#E6E8EC] bg-white px-3.5 py-2.5">
+    <div className="relative flex flex-col gap-2 border-b border-[#E6E8EC] bg-white px-3.5 py-2.5">
       {/* Row 1: Date Filter, Sorter & Performance Badge Filter (Single Horizontal Line) */}
       <div className="flex w-full items-center gap-1.5 flex-nowrap">
         <select
