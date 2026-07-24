@@ -6,7 +6,7 @@
  *  - Patch window.fetch + XMLHttpRequest to parse Instagram GraphQL/REST media
  *    responses into the capture store (and grab the x-ig-app-id header).
  *  - Seed from inline JSON preloads on each route.
- *  - Render/refresh the on-post overlays via a MutationObserver (+ 1 s safety).
+ *  - Render/refresh the on-post overlays via a MutationObserver (+ 5 s safety).
  *  - Run the in-page blob downloader and surface its queue length.
  *  - Bridge with the ISOLATED world: receive overlay-mode / ER-weight changes
  *    (window.postMessage) and single-file download requests (DOM event);
@@ -39,25 +39,27 @@ import {
   type BridgePostMessage,
   type DownloadEventDetail,
 } from '../shared/types/messages';
+import { validateMediaDownloadUrl, sanitizeDownloadFilename } from '../shared/utils/urlValidation';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+let lastSnapshotCount = -1;
 
 export default defineContentScript({
   matches: ['https://www.instagram.com/*'],
   world: 'MAIN',
   runAt: 'document_start',
-  allFrames: true,
   main() {
-    // 1) Patch the network *synchronously* before Instagram boots.
+    // 1) Patch network primitives synchronously before Instagram boots
     installNetworkInterception();
 
-    // 2) In-page downloader; queue length is broadcast to the panel.
+    // 2) In-page downloader with concurrency control (max 3)
     const downloader = new MediaDownloader((count) => {
       document.dispatchEvent(new CustomEvent(DOM_EVENT.downloadQueue, { detail: { count } }));
     });
     setDownloadFn((url, prefix) => void downloader.download(url, prefix));
 
-    // 3) ISOLATED → MAIN: overlay mode + ER weight changes.
+    // 3) ISOLATED → MAIN: overlay mode + ER weight changes
     window.addEventListener('message', (event) => {
       if (event.source !== window) return;
       const data = event.data as BridgePostMessage | undefined;
@@ -70,14 +72,19 @@ export default defineContentScript({
       }
     });
 
-    // 4) ISOLATED → MAIN: single-file download requests (bulk engine).
+    // 4) ISOLATED → MAIN: single-file download requests
     document.addEventListener(DOM_EVENT.download, (event) => {
       const detail = (event as CustomEvent<DownloadEventDetail>).detail;
       const src = detail?.video_src;
-      if (src?.video_url) void downloader.download(src.video_url, src.prefix);
+      if (src?.video_url) {
+        const valRes = validateMediaDownloadUrl(src.video_url);
+        if (valRes.valid) {
+          void downloader.download(src.video_url, sanitizeDownloadFilename(src.prefix));
+        }
+      }
     });
 
-    // 5) Render loop.
+    // 5) Optimized render loop
     startRenderLoop();
   },
 });
@@ -162,7 +169,13 @@ function installNetworkInterception(): void {
   proto.send = function (this: TaggedXHR) {
     this.addEventListener('load', function (this: XMLHttpRequest) {
       if (this.status >= 200 && this.status < 300) {
-        handleResponse(this.responseURL, this.responseText);
+        try {
+          if (this.responseType === '' || this.responseType === 'text') {
+            handleResponse(this.responseURL, this.responseText);
+          }
+        } catch {
+          /* ignore responseText access error if non-text response */
+        }
       }
     });
     // eslint-disable-next-line prefer-rest-params
@@ -199,7 +212,7 @@ function installNetworkInterception(): void {
 }
 
 /* ------------------------------------------------------------------ *
- * Render loop — MutationObserver (throttled) + 1 s safety tick
+ * Render loop — MutationObserver (debounced) + 5 s safety tick
  * ------------------------------------------------------------------ */
 
 function startRenderLoop(): void {
@@ -210,7 +223,7 @@ function startRenderLoop(): void {
     setTimeout(() => {
       scheduled = false;
       scanAndPublish();
-    }, 300);
+    }, 200);
   };
 
   const startObserver = () => {
@@ -222,13 +235,14 @@ function startRenderLoop(): void {
   if (document.body) startObserver();
   else document.addEventListener('DOMContentLoaded', startObserver, { once: true });
 
-  // Safety net: guarantees refresh even without DOM mutations (e.g. metric
-  // backfills arriving via self-issued requests).
-  setInterval(scanAndPublish, 1000);
+  // 5-second safety net when tab is active (MutationObserver handles immediate mutations)
+  setInterval(scanAndPublish, 5000);
   scanAndPublish();
 }
 
 function scanAndPublish(): void {
+  if (document.visibilityState !== 'visible') return;
+
   const url = new URL(window.location.href);
 
   try {
@@ -242,9 +256,12 @@ function scanAndPublish(): void {
     /* ignore */
   }
 
-  if (document.visibilityState !== 'visible') return;
   const snapshot = store.snapshot();
-  document.dispatchEvent(
-    new CustomEvent(DOM_EVENT.info, { detail: { root: snapshot.length > 0 ? snapshot : null } }),
-  );
+  // Only publish when snapshot count or data changes
+  if (snapshot.length !== lastSnapshotCount) {
+    lastSnapshotCount = snapshot.length;
+    document.dispatchEvent(
+      new CustomEvent(DOM_EVENT.info, { detail: { root: snapshot.length > 0 ? snapshot : null } }),
+    );
+  }
 }

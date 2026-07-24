@@ -16,20 +16,27 @@ import {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Raw = any;
 
-/** Find the first inline JSON script whose text contains `needle`, parsed. */
-function findJsonScriptContaining(needle: string): Raw | null {
-  const scripts = document.querySelectorAll('script[type="application/json"]');
+const scannedScripts = new WeakSet<HTMLScriptElement>();
+
+/** Find inline JSON scripts containing `needle`, continuing past individual parse errors. */
+function findJsonScriptsContaining(needle: string): Raw[] {
+  const results: Raw[] = [];
+  const scripts = document.querySelectorAll<HTMLScriptElement>('script[type="application/json"]');
   for (const script of scripts) {
+    if (scannedScripts.has(script)) continue;
     const text = script.textContent ?? '';
     if (text.includes(needle)) {
       try {
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        scannedScripts.add(script);
+        results.push(parsed);
       } catch {
-        return null;
+        // Continue scanning remaining script tags on parse failure
+        continue;
       }
     }
   }
-  return null;
+  return results;
 }
 
 /** Explore grid is embedded inside PolarisQueryPreloaderCache as a raw string. */
@@ -62,8 +69,8 @@ export function scanInlinePreloads(url: URL): void {
 
   // Home feed.
   if (path === '/') {
-    const root = findJsonScriptContaining('xdt_api__v1__feed__timeline__connection');
-    if (root) {
+    const roots = findJsonScriptsContaining('xdt_api__v1__feed__timeline__connection');
+    for (const root of roots) {
       for (const conn of collectBboxData(root, 'xdt_api__v1__feed__timeline__connection')) {
         for (const edge of conn?.edges ?? []) {
           const node = edge?.node;
@@ -77,13 +84,13 @@ export function scanInlinePreloads(url: URL): void {
 
   // Single post / reel permalink (optionally under a username segment).
   if (/^\/(?:[^/]+\/)?(?:reel|p)\/[^/]+/.test(path)) {
-    const webInfo = findJsonScriptContaining('xdt_api__v1__media__shortcode__web_info');
-    if (webInfo) {
+    const webInfos = findJsonScriptsContaining('xdt_api__v1__media__shortcode__web_info');
+    for (const webInfo of webInfos) {
       const nodes = collectBboxData(webInfo, 'xdt_api__v1__media__shortcode__web_info');
       for (const item of nodes[0]?.items ?? []) ingestMedia(item);
     }
-    const profile = findJsonScriptContaining('xdt_api__v1__profile_timeline');
-    if (profile) {
+    const profiles = findJsonScriptsContaining('xdt_api__v1__profile_timeline');
+    for (const profile of profiles) {
       for (const block of collectBboxData(profile, 'xdt_api__v1__profile_timeline')) {
         for (const g of block?.profile_grid_items ?? []) {
           try {
@@ -106,8 +113,8 @@ export function scanInlinePreloads(url: URL): void {
 
   // Reels surface.
   if (path.startsWith('/reels/')) {
-    const root = findJsonScriptContaining('xdt_api__v1__clips__home__connection_v2');
-    if (root) {
+    const roots = findJsonScriptsContaining('xdt_api__v1__clips__home__connection_v2');
+    for (const root of roots) {
       for (const conn of collectBboxData(root, 'xdt_api__v1__clips__home__connection_v2')) {
         for (const edge of conn?.edges ?? []) ingestMedia(edge?.node?.media);
       }
@@ -117,8 +124,8 @@ export function scanInlinePreloads(url: URL): void {
 
   // Location pages.
   if (path.startsWith('/explore/locations/')) {
-    const root = findJsonScriptContaining('xdt_location_get_web_info_tab');
-    if (root) {
+    const roots = findJsonScriptsContaining('xdt_location_get_web_info_tab');
+    for (const root of roots) {
       for (const tab of collectBboxData(root, 'xdt_location_get_web_info_tab')) {
         for (const edge of tab?.edges ?? []) ingestMedia(edge?.node);
       }
@@ -128,8 +135,8 @@ export function scanInlinePreloads(url: URL): void {
 
   // Explore grid (embedded as a raw string in the preloader cache).
   if (path.startsWith('/explore/')) {
-    const root = findJsonScriptContaining('PolarisQueryPreloaderCache');
-    if (root) {
+    const roots = findJsonScriptsContaining('PolarisQueryPreloaderCache');
+    for (const root of roots) {
       for (const response of collectExploreGridResponses(root)) parseExploreSections(response);
     }
   }
