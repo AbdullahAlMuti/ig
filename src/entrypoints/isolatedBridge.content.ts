@@ -44,7 +44,6 @@ export default defineContentScript({
 
     /* ---- MAIN → background / panel ---- */
     document.addEventListener(DOM_EVENT.info, (event) => {
-      if (document.visibilityState !== 'visible') return;
       const root = (event as CustomEvent).detail?.root ?? null;
       const valRes = validateSnapshotRootPayload(root);
       if (!valRes.valid) {

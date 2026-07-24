@@ -26,7 +26,7 @@ import { exportPostsToExcel } from '../../../shared/utils/excelExporter';
 import type { RankingResult } from '../../../shared/utils/performanceRanker';
 import { sendToInstagramTab } from '../../../shared/utils/tabMessaging';
 
-const WATCHDOG_MS = 2500;
+const WATCHDOG_MS = 4000;
 
 export interface BulkProgress {
   scopeLabel: string;

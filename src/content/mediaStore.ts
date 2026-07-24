@@ -23,6 +23,7 @@ export class MediaStore {
   readonly thumbInFlight = new Set<string>();
 
   weights: EngagementWeights = { ...DEFAULT_ER_WEIGHTS };
+  revision = 0;
 
   get size(): number {
     return this.byCode.size;
@@ -48,10 +49,14 @@ export class MediaStore {
   setWeights(input: unknown): void {
     this.weights = normalizeWeights(input);
     recalcEngagementRates([...this.byCode.values()], this.weights);
+    this.revision++;
   }
 
   upsertUser(user: InstagramUserRecord | undefined | null): void {
-    if (user?.id && !this.users.has(user.id)) this.users.set(user.id, user);
+    if (user?.id && !this.users.has(user.id)) {
+      this.users.set(user.id, user);
+      this.revision++;
+    }
   }
 
   /**

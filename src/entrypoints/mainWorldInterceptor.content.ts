@@ -6,7 +6,7 @@
  *  - Patch window.fetch + XMLHttpRequest to parse Instagram GraphQL/REST media
  *    responses into the capture store (and grab the x-ig-app-id header).
  *  - Seed from inline JSON preloads on each route.
- *  - Render/refresh the on-post overlays via a MutationObserver (+ 5 s safety).
+ *  - Render/refresh the on-post overlays via a MutationObserver (+ 1.5 s safety).
  *  - Run the in-page blob downloader and surface its queue length.
  *  - Bridge with the ISOLATED world: receive overlay-mode / ER-weight changes
  *    (window.postMessage) and single-file download requests (DOM event);
@@ -43,12 +43,11 @@ import { validateMediaDownloadUrl, sanitizeDownloadFilename } from '../shared/ut
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-let lastSnapshotCount = -1;
-
 export default defineContentScript({
   matches: ['https://www.instagram.com/*'],
   world: 'MAIN',
   runAt: 'document_start',
+  allFrames: true,
   main() {
     // 1) Patch network primitives synchronously before Instagram boots
     installNetworkInterception();
@@ -84,7 +83,7 @@ export default defineContentScript({
       }
     });
 
-    // 5) Optimized render loop
+    // 5) Render loop
     startRenderLoop();
   },
 });
@@ -212,7 +211,7 @@ function installNetworkInterception(): void {
 }
 
 /* ------------------------------------------------------------------ *
- * Render loop — MutationObserver (debounced) + 5 s safety tick
+ * Render loop — MutationObserver (debounced) + 1.5 s heartbeat tick
  * ------------------------------------------------------------------ */
 
 function startRenderLoop(): void {
@@ -235,14 +234,12 @@ function startRenderLoop(): void {
   if (document.body) startObserver();
   else document.addEventListener('DOMContentLoaded', startObserver, { once: true });
 
-  // 5-second safety net when tab is active (MutationObserver handles immediate mutations)
-  setInterval(scanAndPublish, 5000);
+  // 1.5-second heartbeat tick (keeps sidepanel watchdog alive & synced)
+  setInterval(scanAndPublish, 1500);
   scanAndPublish();
 }
 
 function scanAndPublish(): void {
-  if (document.visibilityState !== 'visible') return;
-
   const url = new URL(window.location.href);
 
   try {
@@ -257,11 +254,7 @@ function scanAndPublish(): void {
   }
 
   const snapshot = store.snapshot();
-  // Only publish when snapshot count or data changes
-  if (snapshot.length !== lastSnapshotCount) {
-    lastSnapshotCount = snapshot.length;
-    document.dispatchEvent(
-      new CustomEvent(DOM_EVENT.info, { detail: { root: snapshot.length > 0 ? snapshot : null } }),
-    );
-  }
+  document.dispatchEvent(
+    new CustomEvent(DOM_EVENT.info, { detail: { root: snapshot.length > 0 ? snapshot : null } }),
+  );
 }
